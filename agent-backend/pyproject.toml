@@ -8,7 +8,13 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "playwright (>=1.56.0,<2.0.0)",
+    "uvicorn (>=0.38.0,<0.39.0)",
+    "fastapi (>=0.123.0,<0.124.0)"
 ]
+
+[tool.poetry.scripts]
+dev = "agent_backend.scripts.dev:dev"
 
 [tool.poetry]
 packages = [{include = "agent_backend", from = "src"}]
