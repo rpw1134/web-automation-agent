@@ -140,12 +140,22 @@ class BrowserManager:
             KeyError: If no browser context is found with the given ID.
             RuntimeError: If the browser context is no longer valid.
         """
+        import asyncio
+        print(f"[BrowserManager.create_page] Getting context {context_id}...")
+        current_loop = asyncio.get_event_loop()
+        print(f"[BrowserManager.create_page] Current event loop ID: {id(current_loop)}")
+        print(f"[BrowserManager.create_page] Current event loop: {current_loop}")
         context: BrowserContext = self.get_browser_context_by_id(context_id)
+        print(f"[BrowserManager.create_page] Got context, creating new page...")
+        print(f"[BrowserManager.create_page] About to call context.new_page()...")
         page = await context.new_page()
+        print(f"[BrowserManager.create_page] context.new_page() returned!")
+        print(f"[BrowserManager.create_page] Page created, assigning ID...")
         page_id = uuid4()
         if context_id not in self._pages:
             self._pages[context_id] = {}
         self._pages[context_id][page_id] = page
+        print(f"[BrowserManager.create_page] Done! page_id={page_id}")
         return page_id, page
     
     async def delete_page_by_page_id(self, context_id: UUID, page_id: UUID):
@@ -204,6 +214,7 @@ class BrowserManager:
         """
         context_id = uuid4()
         browser_context = await self.browser.new_context()
+        print("Created")
         self._contexts[context_id] = browser_context
         return (context_id, browser_context)
     

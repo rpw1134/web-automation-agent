@@ -13,8 +13,12 @@ async def go_to_url(context_id: UUID, url: str) -> Tuple[UUID, Page]:
         url: The URL to navigate to.
     Returns:
         Tuple[UUID,Page]: A tuple containing the new page's UUID and the Page instance."""
+    print(f"[go_to_url] Creating page for context {context_id}...")
     page_id, page = await create_page(context_id)
-    await page.goto(url)
+    print(f"[go_to_url] Page created: {page_id}")
+    print(f"[go_to_url] Navigating to {url}...")
+    await page.goto(url, timeout=30000)  # 30 second timeout
+    print(f"[go_to_url] Navigation complete!")
     return (page_id, page)
 
 async def click(context_id: UUID, page_id: UUID, selector: str) -> str:

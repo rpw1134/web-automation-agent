@@ -23,7 +23,10 @@ async def get_page_by_id(context_id: UUID, page_id: UUID)->Page:
 
 async def create_page(context_id: UUID) -> Tuple[UUID, Page]:
     """Create a new page within a specific browser context."""
-    return await browser_manager.create_page(context_id)
+    print(f"[create_page] Calling browser_manager.create_page({context_id})...")
+    result = await browser_manager.create_page(context_id)
+    print(f"[create_page] Page created successfully")
+    return result
 
 async def delete_page_by_page_id(context_id: UUID, page_id: UUID):
     """Delete a page by its ID within a specific browser context."""
