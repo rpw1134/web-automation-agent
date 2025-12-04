@@ -145,6 +145,37 @@ async def set_viewport_size(context_id: UUID, page_id: UUID, width: int, height:
         return f"Unexpected error setting viewport size to ({width}, {height}): {str(e)}"
     return f"Successfully set viewport size to ({width}, {height})."
 
+async def reload_page(context_id: UUID, page_id: UUID) -> str:
+    """Reload a page.
+    Args:
+        context_id: The UUID of the browser context containing the page.
+        page_id: The UUID of the page to reload.
+    Returns:
+        str: A message indicating success or failure.
+    """
+    page: Page = await get_page_by_id(context_id, page_id)
+    try:
+        await page.reload()
+    except Exception as e:
+        return f"Unexpected error reloading page: {str(e)}"
+    return "Successfully reloaded the page."
+
+async def screenshot_page(context_id: UUID, page_id: UUID, path: str) -> str:
+    """Take a screenshot of a page.
+    Args:
+        context_id: The UUID of the browser context containing the page.
+        page_id: The UUID of the page to screenshot.
+    Returns:
+        str: A message indicating success or failure.
+    """
+    page: Page = await get_page_by_id(context_id, page_id)
+    try:
+        await page.screenshot(path=path)
+    except Exception as e:
+        return f"Unexpected error taking screenshot: {str(e)}"
+    return f"Successfully took screenshot and saved to '{path}'."
+
+
 async def get_open_pages(context_id: UUID):
     """Retrieve all open pages in a given browser context."""
     browser_context = await get_browser_context_by_id(context_id)
