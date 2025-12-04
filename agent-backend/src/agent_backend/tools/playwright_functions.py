@@ -7,7 +7,7 @@ async def get_browser_context_by_id(context_id: UUID) -> BrowserContext:
     """Retrieve a browser context by its ID."""
     return browser_manager.get_browser_context_by_id(context_id)
 
-async def go_to_page(context_id: UUID, url: str):
+async def go_to_url(context_id: UUID, url: str):
     """Navigate to a page using the global browser instance."""
     #TODO: store page metadata if needed
     browser_context = await get_browser_context_by_id(context_id)
