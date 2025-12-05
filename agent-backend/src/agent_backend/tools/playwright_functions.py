@@ -21,6 +21,8 @@ async def go_to_url(context_id: UUID, url: str) -> Tuple[UUID, Page]:
     print(f"[go_to_url] Navigation complete!")
     return (page_id, page)
 
+
+
 async def click(context_id: UUID, page_id: UUID, selector: str) -> str:
     """Click an element on a page.
     Args:
