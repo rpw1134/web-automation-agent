@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from playwright.async_api import async_playwright, Browser, Playwright
+from .routers.agent import router
 from .instances import browser_manager, planner, executor
 
 @asynccontextmanager
@@ -15,3 +16,4 @@ async def lifespan(app: FastAPI):
     await browser_manager.terminate()
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(router)

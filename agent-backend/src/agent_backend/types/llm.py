@@ -10,6 +10,7 @@ class ParsedFunction:
 
 @dataclass
 class PlanResponse:
+    observation: str
     plan: str
     function_calls: list[str]  # Raw function call strings, will be parsed by Executor
     done: bool

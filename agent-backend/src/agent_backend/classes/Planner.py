@@ -44,7 +44,7 @@ class Planner:
             if calls == 15:
                 return "Maximum Number of Calls Exceeded"
             
-            # Get plan
+            # Get observation, plan, and proposed action(s)
             plan: str|None = (await self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=context,
@@ -52,6 +52,7 @@ class Planner:
                 temperature=0.7
             )).choices[0].message.content
             plan_response = self._parse_plan(plan)
+            print(f"[Planner.react_loop] Plan Response: {plan_response}")
             
             # Check for decode error or invalid llm response
             if isinstance(plan_response, PlanResponseError):
@@ -62,16 +63,20 @@ class Planner:
                 return plan_response
             
             # Append messages for context in future loops
+            context.append({"role":"assistant", "content": f"Observation: {plan_response.observation}"})
+            print(f"[Planner.react_loop] Observation: {plan_response.observation}")
             context.append({"role":"assistant", "content": "Thought: "+plan_response.plan})
+            print(f"[Planner.react_loop] Thought: {plan_response.plan}")
             context.append({"role":"assistant", "content": f"Action{"s" if len(plan_response.function_calls)>1 else ""}: {json.dumps(plan_response.function_calls)}"})
-            
+            print(f"[Planner.react_loop] Action(s): {json.dumps(plan_response.function_calls)}")
+
             # Execute desired functions and get response
             execution_response: List[ToolResponse] = await self.executor.execute_request(plan_response.function_calls)
+            print(f"[Planner.react_loop] Execution Response: {json.dumps([asdict(response) for response in execution_response])}")
             
             # Add as context
             context.append({"role":"system", "content": f"Action Response: {json.dumps([asdict(response) for response in execution_response])}"})
             
-            #TODO: Add observation logic, most likely with a seperate prompt
             
     def _parse_plan(self, plan_response: str|None)->Union[PlanResponse, PlanResponseError]:
         """
@@ -90,10 +95,12 @@ class Planner:
         try:
             plan_dict = json.loads(str(plan_response))
             plan: str = plan_dict.get("plan", "")
+            observation: str = plan_dict.get("observation", "")
             
             # Pass raw function call strings - Executor will parse them
             function_calls: list[str] = plan_dict.get("function_calls", [])
             return PlanResponse(
+                observation=observation,
                 plan=plan,
                 function_calls=function_calls,
                 done=True if plan_dict.get("plan", "").lower() == "done" else False
