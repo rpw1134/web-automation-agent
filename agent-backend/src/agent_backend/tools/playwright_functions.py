@@ -58,7 +58,7 @@ click_tool = Tool(
     parameters=Parameters(
         type="object",
         properties={
-            "page_id": {"type": "string", "description": "The UUID of the page where the click will occur."},
+            "page_id": {"type": "UUID", "description": "The UUID of the page where the click will occur."},
             "selector": {"type": "string", "description": "The CSS selector of the element to click."}
         },
         required=["page_id", "selector"]
@@ -92,7 +92,7 @@ type_text_tool = Tool(
     parameters=Parameters(
         type="object",
         properties={
-            "page_id": {"type": "string", "description": "The UUID of the page where the typing will occur."},
+            "page_id": {"type": "UUID", "description": "The UUID of the page where the typing will occur."},
             "selector": {"type": "string", "description": "The CSS selector of the input field."},
             "text": {"type": "string", "description": "The text to type into the input field."}
         },
@@ -128,7 +128,7 @@ extract_text_tool = Tool(
     parameters=Parameters(
         type="object",
         properties={
-            "page_id": {"type": "string", "description": "The UUID of the page where the extraction will occur."},
+            "page_id": {"type": "UUID", "description": "The UUID of the page where the extraction will occur."},
             "selector": {"type": "string", "description": "The CSS selector of the element to extract text from."}
         },
         required=["page_id", "selector"]
@@ -162,7 +162,7 @@ wait_for_selector_tool = Tool(
     parameters=Parameters(
         type="object",
         properties={
-            "page_id": {"type": "string", "description": "The UUID of the page to wait on."},
+            "page_id": {"type": "UUID", "description": "The UUID of the page to wait on."},
             "selector": {"type": "string", "description": "The CSS selector of the element to wait for."},
             "timeout": {"type": "integer", "description": "Maximum time to wait in milliseconds. Default is 5000ms."}
         },
@@ -196,7 +196,7 @@ evaluate_script_tool = Tool(
     parameters=Parameters(
         type="object",
         properties={
-            "page_id": {"type": "string", "description": "The UUID of the page where the script will be evaluated."},
+            "page_id": {"type": "UUID", "description": "The UUID of the page where the script will be evaluated."},
             "script": {"type": "string", "description": "The JavaScript code to evaluate."},
             "arg": {"description": "Optional argument to pass to the script."}
         },
@@ -229,7 +229,7 @@ scroll_tool = Tool(
     parameters=Parameters(
         type="object",
         properties={
-            "page_id": {"type": "string", "description": "The UUID of the page to scroll."},
+            "page_id": {"type": "UUID", "description": "The UUID of the page to scroll."},
             "x": {"type": "integer", "description": "The horizontal pixel value to scroll to."},
             "y": {"type": "integer", "description": "The vertical pixel value to scroll to."}
         },
@@ -262,7 +262,7 @@ set_viewport_size_tool = Tool(
     parameters=Parameters(
         type="object",
         properties={
-            "page_id": {"type": "string", "description": "The UUID of the page to set the viewport size."},
+            "page_id": {"type": "UUID", "description": "The UUID of the page to set the viewport size."},
             "width": {"type": "integer", "description": "The desired viewport width in pixels."},
             "height": {"type": "integer", "description": "The desired viewport height in pixels."}
         },
@@ -293,7 +293,7 @@ reload_page_tool = Tool(
     parameters=Parameters(
         type="object",
         properties={
-            "page_id": {"type": "string", "description": "The UUID of the page to reload."}
+            "page_id": {"type": "UUID", "description": "The UUID of the page to reload."}
         },
         required=["page_id"]
     ),
@@ -322,7 +322,7 @@ screenshot_page_tool = Tool(
     parameters=Parameters(
         type="object",
         properties={
-            "page_id": {"type": "string", "description": "The UUID of the page to screenshot."},
+            "page_id": {"type": "UUID", "description": "The UUID of the page to screenshot."},
             "path": {"type": "string", "description": "The file path where the screenshot will be saved."}
         },
         required=["page_id", "path"]
@@ -346,3 +346,33 @@ get_open_pages_tool = Tool(
     ),
     strict=True
 )
+
+playwright_function_names_to_functions = {
+    "go_to_url": go_to_url,
+    "click": click,
+    "type_text": type_text,
+    "extract_text": extract_text,
+    "wait_for_selector": wait_for_selector,
+    "evaluate_script": evaluate_script,
+    "scroll": scroll,
+    "set_viewport_size": set_viewport_size,
+    "reload_page": reload_page,
+    "screenshot_page": screenshot_page,
+    "get_open_pages": get_open_pages
+}
+
+playwright_function_names_to_tools = {
+    "go_to_url": go_to_url_tool,
+    "click": click_tool,
+    "type_text": type_text_tool,
+    "extract_text": extract_text_tool,
+    "wait_for_selector": wait_for_selector_tool,
+    "evaluate_script": evaluate_script_tool,
+    "scroll": scroll_tool,
+    "set_viewport_size": set_viewport_size_tool,
+    "reload_page": reload_page_tool,
+    "screenshot_page": screenshot_page_tool,
+    "get_open_pages": get_open_pages_tool
+}
+
+all_playwright_tools = list(playwright_function_names_to_tools.values())

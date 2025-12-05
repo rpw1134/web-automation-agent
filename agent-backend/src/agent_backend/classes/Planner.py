@@ -22,6 +22,12 @@ class Planner:
         # call loop
         while calls < 15:
             calls+=1
+            
+            # Check call number
+            if calls == 15:
+                return "Maximum Number of Calls Exceeded"
+            
+            # Get plan
             plan: str|None = (await self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=context,
@@ -29,17 +35,22 @@ class Planner:
                 temperature=0.7
             )).choices[0].message.content
             plan_response = self._parse_plan(plan)
-            # error in decoding/invalid return?
+            
+            # Check for decode error or invalid llm response
             if isinstance(plan_response, PlanResponseError):
                 context.append({"role":"system", "content": f"Error parsing plan: {plan_response.error}. Please try again."})
                 continue
-            # done?
+            # Check if action is to finish the loop
             if plan_response.done:
                 return plan_response
-            context.append({"role":"assistant", "content": plan_response.plan})
+            
+            # Append messages for context in future loops
+            context.append({"role":"assistant", "content": "Thought: "+plan_response.plan})
+            context.append({"role":"assistant", "content": f"Action{"s" if len(plan_response.function_calls)>1 else ""}: {json.dumps(plan_response.function_calls)}"})
             
     def _parse_plan(self, plan: str|None)->Union[PlanResponse, PlanResponseError]:
         # Parse the plan into plan, function calls, and 'done' status, or return error in parsing
+        # TODO: Create function to properly parse actions. Actions should: parse the name of the method, use this to lookup tool definition, parse parameters according to tool definition types, populate a json object and send to executor. This should reduce num tokens produced and in turn possible mistakes. Example response: go_to_url(https://github.com) -> {"url": "https://github.com"}
         plan_dict: dict
         plan_error: PlanResponseError
         try:
