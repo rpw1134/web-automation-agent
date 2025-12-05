@@ -1,20 +1,20 @@
 """
 Integration tests for browser automation using Playwright.
 
-Run with: pytest tests/test_integration_playwright.py -v -s
+Run with: poetry run pytest tests/test_integration_playwright.py -v -s
 """
-
-import sys
-from pathlib import Path
-
-# Add src to path so we can import agent_backend
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import pytest
 import asyncio
-from uuid import UUID
+from pathlib import Path
 
-from agent_backend.classes.BrowserManager import BrowserManager
+from agent_backend.main import browser_manager
+from agent_backend.utils.browser_functions import (
+    create_browser_context,
+    delete_browser_context_by_id,
+    delete_page_by_page_id,
+    get_page_by_id
+)
 from agent_backend.tools.playwright_functions import (
     go_to_url,
     click,
@@ -41,8 +41,6 @@ class TestGitHubNavigation:
     @pytest.mark.asyncio
     async def test_browser_initialization(self):
         """Test that the browser manager initializes correctly."""
-        from agent_backend.main import browser_manager
-        
         await browser_manager.initialize()
         
         assert browser_manager.browser is not None
@@ -53,14 +51,6 @@ class TestGitHubNavigation:
     @pytest.mark.asyncio
     async def test_create_context_and_navigate(self):
         """Test creating a context and navigating to a page."""
-        from agent_backend.main import browser_manager
-        from agent_backend.utils.browser_functions import (
-            create_browser_context,
-            delete_browser_context_by_id,
-            delete_page_by_page_id
-        )
-        
-        # Initialize browser
         await browser_manager.initialize()
         
         try:
@@ -91,14 +81,6 @@ class TestGitHubNavigation:
         3. Fill username field
         4. Take screenshots
         """
-        from agent_backend.main import browser_manager
-        from agent_backend.utils.browser_functions import (
-            create_browser_context,
-            delete_browser_context_by_id,
-            delete_page_by_page_id,
-            get_page_by_id
-        )
-        
         await browser_manager.initialize()
         
         try:
@@ -119,8 +101,10 @@ class TestGitHubNavigation:
             
             # Step 3: Click Sign In
             print("\n[3/5] Clicking Sign In...")
-            await wait_for_selector(context_id, page_id, 'a[href="/login"]', timeout=10000)
-            await click(context_id, page_id, 'a[href="/login"]')
+            # Target the visible desktop sign-in link (not the hidden mobile one)
+            sign_in_selector = 'a[href="/login"]:visible'
+            await wait_for_selector(context_id, page_id, sign_in_selector, timeout=10000)
+            print(await click(context_id, page_id, sign_in_selector))
             await asyncio.sleep(2)
             
             page = await get_page_by_id(context_id, page_id)
@@ -151,13 +135,6 @@ class TestGitHubNavigation:
     @pytest.mark.asyncio
     async def test_extract_text(self):
         """Test extracting text from a page."""
-        from agent_backend.main import browser_manager
-        from agent_backend.utils.browser_functions import (
-            create_browser_context,
-            delete_browser_context_by_id,
-            delete_page_by_page_id
-        )
-        
         await browser_manager.initialize()
         
         try:
@@ -180,13 +157,6 @@ class TestGitHubNavigation:
     @pytest.mark.asyncio
     async def test_scroll(self):
         """Test scrolling on a page."""
-        from agent_backend.main import browser_manager
-        from agent_backend.utils.browser_functions import (
-            create_browser_context,
-            delete_browser_context_by_id,
-            delete_page_by_page_id
-        )
-        
         await browser_manager.initialize()
         
         try:
