@@ -15,7 +15,7 @@ Key Testing Patterns Demonstrated:
 
 import pytest
 from uuid import uuid4, UUID
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from playwright.async_api import Page, BrowserContext
 
 # Import the functions to test
@@ -32,6 +32,7 @@ from agent_backend.tools.playwright_functions import (
     screenshot_page,
     get_open_pages
 )
+from agent_backend.types.tool import ToolResponse
 
 
 @pytest.fixture
@@ -113,13 +114,15 @@ class TestGoToUrl:
         url = "https://example.com"
 
         # Act: Call the function
-        result_page_id, result_page = await go_to_url(context_id, url)
+        result = await go_to_url(context_id, url)
 
         # Assert: Verify the function behaved correctly
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
+        assert url in result.content
+        assert str(page_id) in result.content
         mock_create_page.assert_called_once_with(context_id)
-        mock_page.goto.assert_called_once_with(url)
-        assert result_page_id == page_id
-        assert result_page == mock_page
+        mock_page.goto.assert_called_once_with(url, timeout=30000)
 
 
 class TestClick:
@@ -146,10 +149,12 @@ class TestClick:
         result = await click(context_id, page_id, selector)
 
         # Assert
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
         mock_get_page.assert_called_once_with(context_id, page_id)
         mock_page.click.assert_called_once_with(selector=selector, timeout=5000)
-        assert "Successfully licked element" in result
-        assert selector in result
+        assert "Successfully clicked element" in result.content
+        assert selector in result.content
 
     @pytest.mark.asyncio
     @patch('agent_backend.tools.playwright_functions.get_page_by_id')
@@ -169,8 +174,11 @@ class TestClick:
         result = await click(context_id, page_id, selector)
 
         # Assert
-        assert "timed out" in result.lower()
-        assert selector in result
+        assert isinstance(result, ToolResponse)
+        assert result.success is False
+        assert "ERROR" in result.content
+        assert "timed out" in result.content.lower()
+        assert selector in result.content
 
     @pytest.mark.asyncio
     @patch('agent_backend.tools.playwright_functions.get_page_by_id')
@@ -189,8 +197,11 @@ class TestClick:
         result = await click(context_id, page_id, selector)
 
         # Assert
-        assert "Unexpected error" in result
-        assert "Network error" in result
+        assert isinstance(result, ToolResponse)
+        assert result.success is False
+        assert "ERROR" in result.content
+        assert "Unexpected error" in result.content
+        assert "Network error" in result.content
 
 
 class TestTypeText:
@@ -218,9 +229,11 @@ class TestTypeText:
         result = await type_text(context_id, page_id, selector, text)
 
         # Assert
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
         mock_page.fill.assert_called_once_with(selector=selector, value=text, timeout=5000)
-        assert "Successfully yped text" in result
-        assert text in result
+        assert "Successfully typed text" in result.content
+        assert text in result.content
 
     @pytest.mark.asyncio
     @patch('agent_backend.tools.playwright_functions.get_page_by_id')
@@ -239,8 +252,11 @@ class TestTypeText:
         result = await type_text(context_id, page_id, selector, "test")
 
         # Assert
-        assert "timed out" in result.lower()
-        assert selector in result
+        assert isinstance(result, ToolResponse)
+        assert result.success is False
+        assert "ERROR" in result.content
+        assert "timed out" in result.content.lower()
+        assert selector in result.content
 
 
 class TestExtractText:
@@ -268,8 +284,10 @@ class TestExtractText:
         result = await extract_text(context_id, page_id, selector)
 
         # Assert
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
         mock_page.text_content.assert_called_once_with(selector=selector, timeout=5000)
-        assert result == "Hello World"
+        assert result.content == "Hello World"
 
     @pytest.mark.asyncio
     @patch('agent_backend.tools.playwright_functions.get_page_by_id')
@@ -288,8 +306,11 @@ class TestExtractText:
         result = await extract_text(context_id, page_id, selector)
 
         # Assert
-        assert "No text content found" in result
-        assert selector in result
+        assert isinstance(result, ToolResponse)
+        assert result.success is False
+        assert "ERROR" in result.content
+        assert "No text content found" in result.content
+        assert selector in result.content
 
     @pytest.mark.asyncio
     @patch('agent_backend.tools.playwright_functions.get_page_by_id')
@@ -308,7 +329,10 @@ class TestExtractText:
         result = await extract_text(context_id, page_id, selector)
 
         # Assert
-        assert "timed out" in result.lower()
+        assert isinstance(result, ToolResponse)
+        assert result.success is False
+        assert "ERROR" in result.content
+        assert "timed out" in result.content.lower()
 
 
 class TestWaitForSelector:
@@ -335,8 +359,10 @@ class TestWaitForSelector:
         result = await wait_for_selector(context_id, page_id, selector)
 
         # Assert
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
         mock_page.wait_for_selector.assert_called_once_with(selector=selector, timeout=5000)
-        assert "is now present" in result
+        assert "is now present" in result.content
 
     @pytest.mark.asyncio
     @patch('agent_backend.tools.playwright_functions.get_page_by_id')
@@ -355,6 +381,8 @@ class TestWaitForSelector:
         result = await wait_for_selector(context_id, page_id, selector, timeout=custom_timeout)
 
         # Assert
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
         mock_page.wait_for_selector.assert_called_once_with(selector=selector, timeout=custom_timeout)
 
     @pytest.mark.asyncio
@@ -374,8 +402,11 @@ class TestWaitForSelector:
         result = await wait_for_selector(context_id, page_id, selector)
 
         # Assert
-        assert "timed out" in result.lower()
-        assert "5000ms" in result
+        assert isinstance(result, ToolResponse)
+        assert result.success is False
+        assert "ERROR" in result.content
+        assert "timed out" in result.content.lower()
+        assert "5000ms" in result.content
 
 
 class TestEvaluateScript:
@@ -403,8 +434,10 @@ class TestEvaluateScript:
         result = await evaluate_script(context_id, page_id, script)
 
         # Assert
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
         mock_page.evaluate.assert_called_once_with(expression=script, arg=None)
-        assert result == {"title": "Example Page"}
+        assert "{'title': 'Example Page'}" in result.content
 
     @pytest.mark.asyncio
     @patch('agent_backend.tools.playwright_functions.get_page_by_id')
@@ -424,7 +457,10 @@ class TestEvaluateScript:
         result = await evaluate_script(context_id, page_id, script, arg)
 
         # Assert
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
         mock_page.evaluate.assert_called_once_with(expression=script, arg=arg)
+        assert "result" in result.content
 
     @pytest.mark.asyncio
     @patch('agent_backend.tools.playwright_functions.get_page_by_id')
@@ -442,8 +478,11 @@ class TestEvaluateScript:
         result = await evaluate_script(context_id, page_id, "return x;")
 
         # Assert
-        assert "Unexpected error" in result
-        assert "ReferenceError" in result
+        assert isinstance(result, ToolResponse)
+        assert result.success is False
+        assert "ERROR" in result.content
+        assert "Unexpected error" in result.content
+        assert "ReferenceError" in result.content
 
 
 class TestScroll:
@@ -470,9 +509,11 @@ class TestScroll:
         result = await scroll(context_id, page_id, x, y)
 
         # Assert
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
         mock_page.evaluate.assert_called_once_with(f"window.scrollTo({x}, {y});")
-        assert "Successfully scrolled" in result
-        assert f"({x}, {y})" in result
+        assert "Successfully scrolled" in result.content
+        assert f"({x}, {y})" in result.content
 
     @pytest.mark.asyncio
     @patch('agent_backend.tools.playwright_functions.get_page_by_id')
@@ -490,7 +531,10 @@ class TestScroll:
         result = await scroll(context_id, page_id, 0, 100)
 
         # Assert
-        assert "Unexpected error scrolling" in result
+        assert isinstance(result, ToolResponse)
+        assert result.success is False
+        assert "ERROR" in result.content
+        assert "Unexpected error scrolling" in result.content
 
 
 class TestSetViewportSize:
@@ -517,9 +561,11 @@ class TestSetViewportSize:
         result = await set_viewport_size(context_id, page_id, width, height)
 
         # Assert
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
         mock_page.set_viewport_size.assert_called_once_with({"width": width, "height": height})
-        assert "Successfully set viewport" in result
-        assert f"({width}, {height})" in result
+        assert "Successfully set viewport" in result.content
+        assert f"({width}, {height})" in result.content
 
     @pytest.mark.asyncio
     @patch('agent_backend.tools.playwright_functions.get_page_by_id')
@@ -537,7 +583,10 @@ class TestSetViewportSize:
         result = await set_viewport_size(context_id, page_id, -1, -1)
 
         # Assert
-        assert "Unexpected error" in result
+        assert isinstance(result, ToolResponse)
+        assert result.success is False
+        assert "ERROR" in result.content
+        assert "Unexpected error" in result.content
 
 
 class TestReloadPage:
@@ -563,8 +612,10 @@ class TestReloadPage:
         result = await reload_page(context_id, page_id)
 
         # Assert
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
         mock_page.reload.assert_called_once()
-        assert "Successfully reloaded" in result
+        assert "Successfully reloaded" in result.content
 
     @pytest.mark.asyncio
     @patch('agent_backend.tools.playwright_functions.get_page_by_id')
@@ -582,7 +633,10 @@ class TestReloadPage:
         result = await reload_page(context_id, page_id)
 
         # Assert
-        assert "Unexpected error" in result
+        assert isinstance(result, ToolResponse)
+        assert result.success is False
+        assert "ERROR" in result.content
+        assert "Unexpected error" in result.content
 
 
 class TestScreenshotPage:
@@ -609,9 +663,11 @@ class TestScreenshotPage:
         result = await screenshot_page(context_id, page_id, path)
 
         # Assert
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
         mock_page.screenshot.assert_called_once_with(path=path)
-        assert "Successfully took screenshot" in result
-        assert path in result
+        assert "Successfully took screenshot" in result.content
+        assert path in result.content
 
     @pytest.mark.asyncio
     @patch('agent_backend.tools.playwright_functions.get_page_by_id')
@@ -629,7 +685,10 @@ class TestScreenshotPage:
         result = await screenshot_page(context_id, page_id, "/invalid/path.png")
 
         # Assert
-        assert "Unexpected error" in result
+        assert isinstance(result, ToolResponse)
+        assert result.success is False
+        assert "ERROR" in result.content
+        assert "Unexpected error" in result.content
 
 
 class TestGetOpenPages:
@@ -651,17 +710,22 @@ class TestGetOpenPages:
         # Arrange
         mock_get_context.return_value = mock_browser_context
         mock_page1 = AsyncMock(spec=Page)
+        mock_page1.url = "https://example.com/page1"
         mock_page2 = AsyncMock(spec=Page)
+        mock_page2.url = "https://example.com/page2"
         mock_browser_context.pages = [mock_page1, mock_page2]
 
         # Act
         result = await get_open_pages(context_id)
 
         # Assert
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
         mock_get_context.assert_called_once_with(context_id)
-        assert len(result) == 2
-        assert mock_page1 in result
-        assert mock_page2 in result
+        assert "Page 0:" in result.content
+        assert "Page 1:" in result.content
+        assert "example.com/page1" in result.content
+        assert "example.com/page2" in result.content
 
     @pytest.mark.asyncio
     @patch('agent_backend.tools.playwright_functions.get_browser_context_by_id')
@@ -669,7 +733,7 @@ class TestGetOpenPages:
         """
         Test get_open_pages with no open pages.
 
-        Verifies that an empty list is returned when no pages are open.
+        Verifies that an appropriate message is returned when no pages are open.
         """
         # Arrange
         mock_get_context.return_value = mock_browser_context
@@ -679,4 +743,6 @@ class TestGetOpenPages:
         result = await get_open_pages(context_id)
 
         # Assert
-        assert result == []
+        assert isinstance(result, ToolResponse)
+        assert result.success is True
+        assert "No open pages" in result.content

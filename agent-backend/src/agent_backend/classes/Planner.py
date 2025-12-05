@@ -1,20 +1,30 @@
 from openai import AsyncClient
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionMessage
 from ..utils.prompts import REACT_PLANNING_SYSTEM_PROMPT
-from typing import List, Union
+from typing import List, Union, TYPE_CHECKING
 from ..types.llm import PlanResponse, PlanResponseError
 from ..types.tool import ToolResponse
 import json
 from dataclasses import asdict
 
-# Import executor lazily to avoid circular import
-def get_executor():
-    from ..instances import executor
-    return executor
+if TYPE_CHECKING:
+    from .Executor import Executor
 
 class Planner:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, executor: "Executor | None" = None):
         self.client = AsyncClient(api_key=api_key)
+        self._executor: "Executor | None" = executor
+    
+    def set_executor(self, executor: "Executor") -> None:
+        """Set the executor instance (for dependency injection after construction)."""
+        self._executor = executor
+    
+    @property
+    def executor(self) -> "Executor":
+        """Get the executor instance."""
+        if self._executor is None:
+            raise RuntimeError("Executor not set. Call set_executor() first.")
+        return self._executor
     
     async def react_loop(self, user_request: str):
         # Send a PLAN request to OpenAI
@@ -56,7 +66,7 @@ class Planner:
             context.append({"role":"assistant", "content": f"Action{"s" if len(plan_response.function_calls)>1 else ""}: {json.dumps(plan_response.function_calls)}"})
             
             # Execute desired functions and get response
-            execution_response: List[ToolResponse] = await get_executor().execute_request(plan_response.function_calls)
+            execution_response: List[ToolResponse] = await self.executor.execute_request(plan_response.function_calls)
             
             # Add as context
             context.append({"role":"system", "content": f"Action Response: {json.dumps([asdict(response) for response in execution_response])}"})

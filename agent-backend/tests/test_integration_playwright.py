@@ -63,7 +63,7 @@ class TestGitHubNavigation:
 
         try:
             # Create context
-            context_id, context = await create_browser_context()
+            context_id, _ = await create_browser_context()
             print(f"✅ Context created: {context_id}")
 
             # Navigate to GitHub
