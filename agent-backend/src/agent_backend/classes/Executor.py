@@ -2,23 +2,25 @@ from openai import AsyncClient
 from typing import List
 from uuid import UUID
 from ..types.llm import ParsedFunction
-from ..tools.playwright_functions import playwright_function_names_to_tools
+from ..types.tool import ToolResponse
+from ..tools.playwright_functions import playwright_function_names_to_tools, playwright_function_names_to_functions
+from collections.abc import Callable
 
 class Executor:
     def __init__(self, env_key: str):
         self.client = AsyncClient(api_key=env_key)
 
-    def parse_functions(self, function_calls: list[str]) -> List[ParsedFunction]:
+    def _parse_functions(self, function_calls: list[str]) -> List[ParsedFunction]:
         """
         Parse raw function call strings into ParsedFunction objects.
 
-        Example: "go_to_url(https://github.com)" -> ParsedFunction(name="go_to_url", arguments=["https://github.com"])
+        Example: "go_to_url(https://github.com)" -> ParsedFunction(function=go_to_url, arguments=["https://github.com"])
 
         Args:
             function_calls: List of function call strings in format "func_name(arg1, arg2, ...)"
 
         Returns:
-            List of ParsedFunction objects with parsed names and arguments
+            List of ParsedFunction objects with parsed function reference and arguments
 
         Raises:
             ValueError: If function not found in tool definitions or unsupported parameter type
@@ -28,6 +30,9 @@ class Executor:
         for func_call in function_calls:
             # Split function name and arguments
             func_name = func_call.split("(")[0]
+            function: Callable | None = playwright_function_names_to_functions.get(func_name, None)
+            if not function:
+                raise ValueError(f"Function {func_name} not found in function mappings.")
             func_args = func_call[len(func_name)+1:-1].split(",")
             func_args_parsed = []
 
@@ -52,6 +57,31 @@ class Executor:
                     case _:
                         raise ValueError(f"Unsupported parameter type: {property.get('type')}")
 
-            functions.append(ParsedFunction(name=func_name, arguments=func_args_parsed))
+            functions.append(ParsedFunction(function=function, arguments=func_args_parsed))
 
         return functions
+    
+    async def _execute_function(self, parsed_function: ParsedFunction)->ToolResponse:
+        function = parsed_function.function
+        return await function(*parsed_function.arguments)
+    
+    async def execute_request(self, function_calls: List[str]) -> List[ToolResponse]:
+        """
+        Execute a list of raw function call strings.
+
+        Args:
+            function_calls: List of function call strings in format "func_name(arg1, arg2, ...)"
+
+        Returns:
+            List of results from each function execution
+        """
+        results = []
+        parsed_functions = self._parse_functions(function_calls)
+
+        for parsed_function in parsed_functions:
+            result: ToolResponse = await self._execute_function(parsed_function)
+            results.append(result)
+            if not result.success:
+                break  # Stop execution if any function fails
+
+        return results

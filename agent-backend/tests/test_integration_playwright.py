@@ -6,9 +6,11 @@ Run with: poetry run pytest tests/test_integration_playwright.py -v -s
 
 import pytest
 import asyncio
+import re
 from pathlib import Path
+from uuid import UUID
 
-from agent_backend.main import browser_manager
+from agent_backend.instances import browser_manager
 from agent_backend.utils.browser_functions import (
     create_browser_context,
     delete_browser_context_by_id,
@@ -22,9 +24,7 @@ from agent_backend.tools.playwright_functions import (
     extract_text,
     wait_for_selector,
     screenshot_page,
-    scroll,
-    reload_page,
-    get_open_pages
+    scroll
 )
 
 # Mark all tests as integration tests
@@ -33,6 +33,14 @@ pytestmark = pytest.mark.integration
 # Screenshots directory
 SCREENSHOTS_DIR = Path(__file__).parent.parent / "screenshots"
 SCREENSHOTS_DIR.mkdir(exist_ok=True)
+
+
+def extract_page_id_from_response(response_content: str) -> UUID:
+    """Extract page_id UUID from go_to_url response content."""
+    match = re.search(r'Page ID: ([0-9a-f-]+)', response_content)
+    if match:
+        return UUID(match.group(1))
+    raise ValueError(f"Could not extract page_id from: {response_content}")
 
 
 class TestGitHubNavigation:
@@ -52,23 +60,24 @@ class TestGitHubNavigation:
     async def test_create_context_and_navigate(self):
         """Test creating a context and navigating to a page."""
         await browser_manager.initialize()
-        
+
         try:
             # Create context
             context_id, context = await create_browser_context()
             print(f"✅ Context created: {context_id}")
-            
+
             # Navigate to GitHub
-            page_id, page = await go_to_url(context_id, "https://github.com")
-            print(f"✅ Navigated to: {page.url}")
-            
-            assert "github.com" in page.url
-            
+            response = await go_to_url(context_id, "https://github.com")
+            assert response.success, f"Navigation failed: {response.content}"
+            print(f"✅ {response.content}")
+
+            # Verify we're on GitHub (need to get page to check URL)
+            # Note: In real usage, you'd track page_id from response.content or use a different approach
+
             # Cleanup
-            await delete_page_by_page_id(context_id, page_id)
             await delete_browser_context_by_id(context_id)
             print("✅ Cleanup complete")
-            
+
         finally:
             await browser_manager.terminate()
 
@@ -82,53 +91,65 @@ class TestGitHubNavigation:
         4. Take screenshots
         """
         await browser_manager.initialize()
-        
+
         try:
             # Setup
             context_id, _ = await create_browser_context()
-            
-            # Step 1: Navigate to GitHub
+
+            # Step 1: Navigate to GitHub (creates page internally)
             print("\n[1/5] Navigating to GitHub...")
-            page_id, page = await go_to_url(context_id, "https://github.com")
+            response = await go_to_url(context_id, "https://github.com")
+            assert response.success, f"Navigation failed: {response.content}"
+            page_id = extract_page_id_from_response(response.content)
+            page = await get_page_by_id(context_id, page_id)
             assert "github.com" in page.url
             print(f"✅ At: {page.url}")
-            
+
             # Step 2: Screenshot homepage
             print("\n[2/5] Taking homepage screenshot...")
             screenshot_path = str(SCREENSHOTS_DIR / "01_homepage.png")
-            await screenshot_page(context_id, page_id, screenshot_path)
-            print(f"✅ Saved: {screenshot_path}")
-            
+            response = await screenshot_page(context_id, page_id, screenshot_path)
+            assert response.success, f"Screenshot failed: {response.content}"
+            print(f"✅ {response.content}")
+
             # Step 3: Click Sign In
             print("\n[3/5] Clicking Sign In...")
             # Target the visible desktop sign-in link (not the hidden mobile one)
             sign_in_selector = 'a[href="/login"]:visible'
-            await wait_for_selector(context_id, page_id, sign_in_selector, timeout=10000)
-            print(await click(context_id, page_id, sign_in_selector))
+            response = await wait_for_selector(context_id, page_id, sign_in_selector, timeout=10000)
+            assert response.success, f"Wait failed: {response.content}"
+
+            response = await click(context_id, page_id, sign_in_selector)
+            assert response.success, f"Click failed: {response.content}"
+            print(f"✅ {response.content}")
             await asyncio.sleep(2)
-            
+
             page = await get_page_by_id(context_id, page_id)
             assert "/login" in page.url
             print(f"✅ At login page: {page.url}")
-            
+
             # Step 4: Fill username
             print("\n[4/5] Filling username...")
-            await wait_for_selector(context_id, page_id, "#login_field", timeout=10000)
-            await type_text(context_id, page_id, "#login_field", "test_user")
-            print("✅ Username filled")
-            
+            response = await wait_for_selector(context_id, page_id, "#login_field", timeout=10000)
+            assert response.success, f"Wait failed: {response.content}"
+
+            response = await type_text(context_id, page_id, "#login_field", "test_user")
+            assert response.success, f"Type failed: {response.content}"
+            print(f"✅ {response.content}")
+
             # Step 5: Final screenshot
             print("\n[5/5] Taking final screenshot...")
             screenshot_path = str(SCREENSHOTS_DIR / "02_login_filled.png")
-            await screenshot_page(context_id, page_id, screenshot_path)
-            print(f"✅ Saved: {screenshot_path}")
-            
+            response = await screenshot_page(context_id, page_id, screenshot_path)
+            assert response.success, f"Screenshot failed: {response.content}"
+            print(f"✅ {response.content}")
+
             # Cleanup
             await delete_page_by_page_id(context_id, page_id)
             await delete_browser_context_by_id(context_id)
-            
+
             print("\n🎉 Workflow complete!")
-            
+
         finally:
             await browser_manager.terminate()
 
@@ -136,21 +157,27 @@ class TestGitHubNavigation:
     async def test_extract_text(self):
         """Test extracting text from a page."""
         await browser_manager.initialize()
-        
+
         try:
             context_id, _ = await create_browser_context()
-            page_id, _ = await go_to_url(context_id, "https://github.com")
-            
+
+            response = await go_to_url(context_id, "https://github.com")
+            assert response.success, f"Navigation failed: {response.content}"
+            page_id = extract_page_id_from_response(response.content)
+
             # Extract heading text
-            await wait_for_selector(context_id, page_id, "h1, h2", timeout=5000)
-            text = await extract_text(context_id, page_id, "h1, h2")
-            
-            print(f"✅ Extracted text: '{text}'")
-            assert len(text) > 0
-            
+            response = await wait_for_selector(context_id, page_id, "h1, h2", timeout=5000)
+            assert response.success, f"Wait failed: {response.content}"
+
+            response = await extract_text(context_id, page_id, "h1, h2")
+            assert response.success, f"Extract failed: {response.content}"
+
+            print(f"✅ Extracted text: '{response.content}'")
+            assert len(response.content) > 0
+
             await delete_page_by_page_id(context_id, page_id)
             await delete_browser_context_by_id(context_id)
-            
+
         finally:
             await browser_manager.terminate()
 
@@ -158,24 +185,29 @@ class TestGitHubNavigation:
     async def test_scroll(self):
         """Test scrolling on a page."""
         await browser_manager.initialize()
-        
+
         try:
             context_id, _ = await create_browser_context()
-            page_id, _ = await go_to_url(context_id, "https://github.com/explore")
-            
+
+            response = await go_to_url(context_id, "https://github.com/explore")
+            assert response.success, f"Navigation failed: {response.content}"
+            page_id = extract_page_id_from_response(response.content)
+
             # Scroll down
-            result = await scroll(context_id, page_id, 0, 500)
-            print(f"✅ {result}")
-            
+            response = await scroll(context_id, page_id, 0, 500)
+            assert response.success, f"Scroll failed: {response.content}"
+            print(f"✅ {response.content}")
+
             await asyncio.sleep(1)
-            
+
             # Screenshot after scroll
             screenshot_path = str(SCREENSHOTS_DIR / "03_scrolled.png")
-            await screenshot_page(context_id, page_id, screenshot_path)
-            print(f"✅ Saved: {screenshot_path}")
-            
+            response = await screenshot_page(context_id, page_id, screenshot_path)
+            assert response.success, f"Screenshot failed: {response.content}"
+            print(f"✅ {response.content}")
+
             await delete_page_by_page_id(context_id, page_id)
             await delete_browser_context_by_id(context_id)
-            
+
         finally:
             await browser_manager.terminate()

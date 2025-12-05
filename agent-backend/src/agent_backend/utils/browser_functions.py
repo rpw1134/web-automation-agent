@@ -1,4 +1,4 @@
-from ..main import browser_manager
+from ..instances import browser_manager
 from playwright.async_api import Page, BrowserContext
 from uuid import UUID
 from typing import Tuple

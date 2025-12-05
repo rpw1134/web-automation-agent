@@ -3,7 +3,14 @@ from openai.types.chat import ChatCompletionMessageParam, ChatCompletionMessage
 from ..utils.prompts import REACT_PLANNING_SYSTEM_PROMPT
 from typing import List, Union
 from ..types.llm import PlanResponse, PlanResponseError
+from ..types.tool import ToolResponse
 import json
+from dataclasses import asdict
+
+# Import executor lazily to avoid circular import
+def get_executor():
+    from ..instances import executor
+    return executor
 
 class Planner:
     def __init__(self, api_key: str):
@@ -48,6 +55,14 @@ class Planner:
             context.append({"role":"assistant", "content": "Thought: "+plan_response.plan})
             context.append({"role":"assistant", "content": f"Action{"s" if len(plan_response.function_calls)>1 else ""}: {json.dumps(plan_response.function_calls)}"})
             
+            # Execute desired functions and get response
+            execution_response: List[ToolResponse] = await get_executor().execute_request(plan_response.function_calls)
+            
+            # Add as context
+            context.append({"role":"system", "content": f"Action Response: {json.dumps([asdict(response) for response in execution_response])}"})
+            
+            #TODO: Add observation logic, most likely with a seperate prompt
+            
     def _parse_plan(self, plan_response: str|None)->Union[PlanResponse, PlanResponseError]:
         """
         Parse the plan response into plan text, raw function calls, and 'done' status.
@@ -65,6 +80,7 @@ class Planner:
         try:
             plan_dict = json.loads(str(plan_response))
             plan: str = plan_dict.get("plan", "")
+            
             # Pass raw function call strings - Executor will parse them
             function_calls: list[str] = plan_dict.get("function_calls", [])
             return PlanResponse(

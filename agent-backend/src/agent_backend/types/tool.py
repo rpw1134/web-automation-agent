@@ -15,6 +15,10 @@ class Tool:
     description: str
     parameters: Parameters
     strict: bool = True
-        
-    
-    
+
+@dataclass
+class ToolResponse:
+    success: bool
+    content: str
+
+
