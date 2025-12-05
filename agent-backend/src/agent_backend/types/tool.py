@@ -16,6 +16,5 @@ class Tool:
     parameters: Parameters
     strict: bool = True
         
-
     
     

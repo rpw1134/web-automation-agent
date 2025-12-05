@@ -1,9 +1,11 @@
 from openai import AsyncClient
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionMessage
 from ..utils.prompts import REACT_PLANNING_SYSTEM_PROMPT
+from ..tools.playwright_functions import playwright_function_names_to_tools
 from typing import List, Union
-from ..types.llm import PlanResponse, PlanResponseError
+from ..types.llm import PlanResponse, PlanResponseError, ParsedFunction
 import json
+from uuid import UUID
 
 class Planner:
     def __init__(self, api_key: str):
@@ -59,3 +61,29 @@ class Planner:
         except json.JSONDecodeError:
             plan_error: PlanResponseError = PlanResponseError(error="Failed to parse plan JSON. Please carefully construct your plan and action.")
             return plan_error
+    
+    def _parse_functions(self, function_calls: list[str]):
+        functions: List[ParsedFunction] = []
+        for func_call in function_calls:
+            func_name = func_call.split("(")[0]
+            func_args = func_call[len(func_name)+1:-1].split(",")
+            func_args_parsed = []
+            tool_def = playwright_function_names_to_tools.get(func_name, None)
+            if not tool_def:
+                raise ValueError(f"Function {func_name} not found in tool definitions.")
+            for i, property in enumerate(tool_def.parameters.properties.values()):
+                match property.type:
+                    case "string":
+                        func_args_parsed[i] = str(func_args[i].strip())
+                    case "int":
+                        func_args_parsed[i] = int(func_args[i].strip())
+                    case "boolean":
+                        func_args_parsed[i] = bool(func_args[i].strip())
+                    case "float":
+                        func_args_parsed[i] = float(func_args[i].strip())
+                    case "UUID":
+                        func_args_parsed[i] = UUID(func_args[i].strip())
+                    case _:
+                        raise ValueError(f"Unsupported parameter type: {property.type}")
+            functions.append(ParsedFunction(name=func_name, arguments=func_args_parsed))
+        return functions
