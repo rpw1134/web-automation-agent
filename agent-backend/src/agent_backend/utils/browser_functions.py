@@ -57,6 +57,6 @@ async def create_new_locators_for_page(page_id: UUID, locators: List[Locator]):
     print(returned_ids)
     return returned_ids
 
-def get_locator_by_id(page_id: UUID, locator_id: UUID) -> Locator:
+async def get_locator_by_id(page_id: UUID, locator_id: UUID) -> Locator:
     """Retrieve a locator by its ID within a specific page."""
-    return _get_browser_manager().get_locator_by_id(page_id, locator_id)
+    return await _get_browser_manager().get_locator_by_id(page_id, locator_id)

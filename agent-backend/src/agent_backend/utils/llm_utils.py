@@ -18,6 +18,7 @@ def parse_delimited_response(response: str | None) -> Union[PlanResponse, PlanRe
     #/FUNCTION_CALLS/#
     function1(arg1=val1,arg2=val2)
     function2(arg1=val1)
+    function3(arg1=val1)
 
     #/DONE/#
     false

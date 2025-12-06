@@ -253,7 +253,7 @@ class BrowserManager:
             if context_id in self._pages:
                 del self._pages[context_id]
                 
-    def get_locator_by_id(self, page_id: UUID, locator_id: UUID) -> Locator:
+    async def get_locator_by_id(self, page_id: UUID, locator_id: UUID) -> Locator:
         """
         Retrieve a locator by its ID within a specific page.
 
@@ -273,7 +273,7 @@ class BrowserManager:
         if locator is None:
             raise KeyError(f"No locator found for ID: {locator_id} in page ID: {page_id}")
         try:
-            _ = locator.element_handle()
+            _ = await locator.element_handle()
         except Exception:
             raise RuntimeError(f"Locator with ID: {locator_id} in page ID: {page_id} is no longer valid.")
         return locator

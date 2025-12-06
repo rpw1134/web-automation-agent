@@ -52,7 +52,8 @@ class Planner:
         calls = 0
         context: List[ChatCompletionMessageParam] = [
             {"role": "system", "content": REACT_PLANNING_SYSTEM_PROMPT},
-            {"role" : "user" , "content": user_request}]
+            {"role" : "user" , "content": user_request},
+            {"role": "system", "content": "You must respond using the delimiter-based format with proper sections."}]
         
         # call loop
         while calls < 15:
@@ -69,6 +70,10 @@ class Planner:
                 max_tokens=1000,
                 temperature=0.7
             )).choices[0].message.content
+            
+            # Remove the last entry to avoid context bloating
+            context.pop()
+            
             print(f"[Planner.react_loop] Raw Plan: {plan}")
             plan_response = self._parse_plan(plan)
             print(f"[Planner.react_loop] Plan Response: {plan_response}")
