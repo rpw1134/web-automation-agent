@@ -63,11 +63,11 @@ class Executor:
 
         return functions
     
-    async def _execute_function(self, parsed_function: ParsedFunction)->ToolResponse:
+    async def _execute_function(self, parsed_function: ParsedFunction, context_id: UUID)->ToolResponse:
         function = parsed_function.function
-        return await function(**parsed_function.arguments)
+        return await function(**parsed_function.arguments, context_id=context_id)
     
-    async def execute_request(self, function_calls: List[str]) -> List[ToolResponse]:
+    async def execute_request(self, function_calls: List[str], context_id: UUID) -> List[ToolResponse]:
         """
         Execute a list of raw function call strings.
 
@@ -81,7 +81,7 @@ class Executor:
         parsed_functions = self._parse_functions(function_calls)
 
         for parsed_function in parsed_functions:
-            result: ToolResponse = await self._execute_function(parsed_function)
+            result: ToolResponse = await self._execute_function(parsed_function, context_id=context_id)
             results.append(result)
             if not result.success:
                 break  # Stop execution if any function fails

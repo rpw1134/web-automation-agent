@@ -15,7 +15,7 @@ class Planner:
     def __init__(self, api_key: str, executor: "Executor | None" = None, browser_manager: "BrowserManager | None" = None):
         self.client = AsyncClient(api_key=api_key)
         self._executor: "Executor | None" = executor
-        self._browser_manager: "BrowserManager | None" = browser_manager  # Placeholder for potential future use
+        self._browser_manager: "BrowserManager | None" = browser_manager
     
     def set_executor(self, executor: "Executor") -> None:
         """Set the executor instance (for dependency injection after construction)."""
@@ -45,6 +45,9 @@ class Planner:
         # Executor parses function request, interacts with browser, synthesizes raw results
         # Returns to planner who takes next steps
         # If at any point, planner sends 'done' or calls exceeds 15, break loop
+        
+        # Create new context for this user request
+        browser_context_id, _ = await self.browser_manager.create_browser_context()
         calls = 0
         context: List[ChatCompletionMessageParam] = [
             {"role": "system", "content": REACT_PLANNING_SYSTEM_PROMPT},
@@ -84,11 +87,12 @@ class Planner:
             print(f"[Planner.react_loop] Action(s): {json.dumps(plan_response.function_calls)}")
 
             # Execute desired functions and get response
-            execution_response: List[ToolResponse] = await self.executor.execute_request(plan_response.function_calls)
+            execution_response: List[ToolResponse] = await self.executor.execute_request(plan_response.function_calls, context_id=browser_context_id)
             print(f"[Planner.react_loop] Execution Response: {json.dumps([asdict(response) for response in execution_response])}")
             
             # Add as context
             context.append({"role":"system", "content": f"Action Response: {json.dumps([asdict(response) for response in execution_response])}"})
+        self.browser_manager.get_browser_context_by_id(browser_context_id)
             
             
     def _parse_plan(self, plan_response: str|None)->Union[PlanResponse, PlanResponseError]:

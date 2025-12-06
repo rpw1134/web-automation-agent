@@ -15,7 +15,7 @@ load_dotenv()
 # Create instances
 browser_manager = BrowserManager()
 executor = Executor(env_key=os.getenv("OPENAI_API_KEY", ""))
-planner = Planner(api_key=os.getenv("OPENAI_API_KEY", ""), executor=executor)
+planner = Planner(api_key=os.getenv("OPENAI_API_KEY", ""), executor=executor, browser_manager=browser_manager)
 
 # Wire up browser_functions module with the browser_manager
 init_browser_functions(browser_manager)
