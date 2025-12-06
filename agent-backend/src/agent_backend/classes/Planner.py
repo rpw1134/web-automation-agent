@@ -52,6 +52,7 @@ class Planner:
         context: List[ChatCompletionMessageParam] = [
             {"role": "system", "content": REACT_PLANNING_SYSTEM_PROMPT},
             {"role" : "user" , "content": user_request}]
+        
         # call loop
         while calls < 15:
             calls+=1
@@ -62,11 +63,12 @@ class Planner:
             
             # Get observation, plan, and proposed action(s)
             plan: str|None = (await self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=context,
+                model="gpt-4o-mini",
+                messages=[*context, {"role": "assistant", "content": "I must remember to respond in valid JSON format."}],
                 max_tokens=1000,
                 temperature=0.7
             )).choices[0].message.content
+            print(f"[Planner.react_loop] Raw Plan: {plan}")
             plan_response = self._parse_plan(plan)
             print(f"[Planner.react_loop] Plan Response: {plan_response}")
             

@@ -50,7 +50,7 @@ async def click(context_id: UUID, page_id: UUID, selector: str) -> ToolResponse:
         await page.click(selector=selector, timeout=5000)
         return ToolResponse(success=True, content=f"Successfully clicked element with selector '{selector}'.")
     except TimeoutError:
-        return ToolResponse(success=False, content=f"ERROR: Request timed out or element with selector '{selector}' not found for clicking.")
+        return ToolResponse(success=False, content=f"ERROR: Request timed out or element with selector '{selector}' not found for clicking. This generally implies either the element is not loaded or there are multiple elements matching your selector. Adding a :visible to your selector may help.")
     except Exception as e:
         return ToolResponse(success=False, content=f"ERROR: Unexpected error clicking element with selector '{selector}': {str(e)}")
 
@@ -62,7 +62,7 @@ click_tool = Tool(
         type="object",
         properties={
             "page_id": {"type": "UUID", "description": "The UUID of the page where the click will occur."},
-            "selector": {"type": "string", "description": "The CSS selector of the element to click."}
+            "selector": {"type": "string", "description": "The selector of the element to click."}
         },
         required=["page_id", "selector"]
     ),
@@ -355,6 +355,74 @@ get_open_pages_tool = Tool(
     strict=True
 )
 
+async def get_element_by(context_id: UUID, page_id: UUID, query: str, query_by: str) -> ToolResponse:
+    """Get an element on a page by various query methods.
+    Args:
+        context_id: The UUID of the browser context containing the page.
+        page_id: The UUID of the page to query.
+        query: The query string to search for (e.g., CSS selector, label text, or text content).
+        query_by: The method to use for querying. Must be one of: "css", "label", "text".
+    Returns:
+        ToolResponse: A dict with success status and message about element found or error.
+    """
+    # Validate query_by parameter
+    valid_query_types = ["css", "label", "text"]
+    if query_by not in valid_query_types:
+        return ToolResponse(
+            success=False,
+            content=f"ERROR: Invalid query_by value '{query_by}'. Must be one of {valid_query_types}."
+        )
+
+    try:
+        page: Page = await get_page_by_id(context_id, page_id)
+
+        # Use appropriate locator method based on query_by
+        if query_by == "css":
+            locator = page.locator(query)
+        elif query_by == "label":
+            locator = page.get_by_label(query)
+        else:
+            locator = page.get_by_text(query)
+
+        # Check if element exists
+        count = await locator.count()
+        if count == 0:
+            return ToolResponse(
+                success=False,
+                content=f"ERROR: No element found with {query_by}='{query}'."
+            )
+
+        return ToolResponse(
+            success=True,
+            content=f"Found {count} element(s) with {query_by}='{query}'."
+        )
+    except TimeoutError:
+        return ToolResponse(
+            success=False,
+            content=f"ERROR: Request timed out while searching for element with {query_by}='{query}'."
+        )
+    except Exception as e:
+        return ToolResponse(
+            success=False,
+            content=f"ERROR: Unexpected error while searching for element with {query_by}='{query}': {str(e)}"
+        )
+
+get_element_by_tool = Tool(
+    type="function",
+    name="get_element_by",
+    description="Get an element on a page using different query methods (CSS selector, label, or text)",
+    parameters=Parameters(
+        type="object",
+        properties={
+            "page_id": {"type": "UUID", "description": "The UUID of the page to query."},
+            "query": {"type": "string", "description": "The query string to search for (e.g., CSS selector, label text, or text content)."},
+            "query_by": {"type": "string", "description": "The method to use for querying. Must be one of: 'css', 'label', 'text'."}
+        },
+        required=["page_id", "query", "query_by"]
+    ),
+    strict=True
+)
+
 playwright_function_names_to_functions: Dict[str, Callable[..., Awaitable[ToolResponse]]] = {
     "go_to_url": go_to_url,
     "click": click,
@@ -366,7 +434,8 @@ playwright_function_names_to_functions: Dict[str, Callable[..., Awaitable[ToolRe
     "set_viewport_size": set_viewport_size,
     "reload_page": reload_page,
     "screenshot_page": screenshot_page,
-    "get_open_pages": get_open_pages
+    "get_open_pages": get_open_pages,
+    "get_element_by": get_element_by
 }
 playwright_function_names_to_tools: Dict[str, Tool] = {
     "go_to_url": go_to_url_tool,
@@ -379,7 +448,8 @@ playwright_function_names_to_tools: Dict[str, Tool] = {
     "set_viewport_size": set_viewport_size_tool,
     "reload_page": reload_page_tool,
     "screenshot_page": screenshot_page_tool,
-    "get_open_pages": get_open_pages_tool
+    "get_open_pages": get_open_pages_tool,
+    "get_element_by": get_element_by_tool
 }
 
 all_playwright_tools: List[Tool] = list(playwright_function_names_to_tools.values())

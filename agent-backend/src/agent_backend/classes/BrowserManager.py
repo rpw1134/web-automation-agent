@@ -1,5 +1,5 @@
 from typing import Dict, Tuple
-from playwright.async_api import BrowserContext, Browser, Playwright, async_playwright, Page
+from playwright.async_api import BrowserContext, Browser, Playwright, async_playwright, Page, Locator
 from uuid import uuid4, UUID
 
 class BrowserManager:
@@ -21,7 +21,10 @@ class BrowserManager:
         self._playwright : Playwright | None = None
         self._browser: Browser | None = None
         self._contexts: Dict[UUID, BrowserContext]  = {}
+        # Context to page mappings
         self._pages: Dict[UUID, Dict[UUID, Page]] = {}
+        # Page to locator mappings
+        self._locators: Dict[UUID, Dict[UUID, Locator]] = {}
     
     @property
     def playwright(self) -> Playwright:
@@ -73,6 +76,17 @@ class BrowserManager:
                 and second UUID is page ID, mapping to Page instances.
         """
         return self._pages
+    
+    @property
+    def locators(self) -> Dict[UUID, Dict[UUID, Locator]]:
+        """
+        Get all locators organized by page.
+
+        Returns:
+            Dict[UUID, Dict[UUID, Locator]]: Nested mapping where first UUID is page ID
+                and second UUID is locator ID, mapping to Locator instances.
+        """
+        return self._locators
     
     async def initialize(self):
         """
@@ -213,7 +227,7 @@ class BrowserManager:
             RuntimeError: If the browser instance is not initialized.
         """
         context_id = uuid4()
-        browser_context = await self.browser.new_context()
+        browser_context = await self.browser.new_context(viewport={'width': 1920, 'height': 1080})
         print("Created")
         self._contexts[context_id] = browser_context
         return (context_id, browser_context)
@@ -238,3 +252,59 @@ class BrowserManager:
             del self._contexts[context_id]
             if context_id in self._pages:
                 del self._pages[context_id]
+                
+    async def get_locator_by_id(self, page_id: UUID, locator_id: UUID) -> Locator:
+        """
+        Retrieve a locator by its ID within a specific page.
+
+        Args:
+            page_id: The UUID of the page containing the locator.
+            locator_id: The UUID of the locator to retrieve.
+
+        Returns:
+            Locator: The requested Playwright Locator instance.
+
+        Raises:
+            KeyError: If no locator is found with the given IDs.
+            RuntimeError: If the locator exists but is no longer valid.
+        """
+        page_locators = self._locators.get(page_id, {})
+        locator = page_locators.get(locator_id, None)
+        if locator is None:
+            raise KeyError(f"No locator found for ID: {locator_id} in page ID: {page_id}")
+        try:
+            _ = locator.element_handle()
+        except Exception:
+            raise RuntimeError(f"Locator with ID: {locator_id} in page ID: {page_id} is no longer valid.")
+        return locator
+    
+    async def store_locator(self, page_id: UUID, locator: Locator) -> UUID:
+        """
+        Store a locator and assign it a UUID.
+
+        Args:
+            page_id: The UUID of the page where the locator is found.
+            locator: The Playwright Locator instance to store.
+        Returns:
+            UUID: The assigned UUID for the stored locator.
+        """        
+        locator_id = uuid4()
+        if page_id not in self._locators:
+            self._locators[page_id] = {}
+        self._locators[page_id][locator_id] = locator
+        return locator_id
+    
+    def delete_locator_by_id(self, page_id: UUID, locator_id: UUID):
+        """
+        Remove a locator from tracking.
+
+        Args:
+            page_id: The UUID of the page containing the locator.
+            locator_id: The UUID of the locator to delete.
+
+        Note:
+            If the locator doesn't exist, this method silently succeeds without error.
+        """
+        page_locators = self._locators.get(page_id, {})
+        if locator_id in page_locators:
+            del page_locators[locator_id]

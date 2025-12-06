@@ -26,13 +26,14 @@ class TestExecutorParseFunctions:
         function_calls = ["go_to_url(url=https://github.com)"]
 
         # Act
-        result = executor._parse_functions(function_calls)
+        result, errors = executor._parse_functions(function_calls)
 
         # Assert
         assert len(result) == 1
         assert isinstance(result[0], ParsedFunction)
         assert result[0].function.__name__ == "go_to_url"
         assert result[0].arguments == {"url": "https://github.com"}
+        assert errors == []
 
     def test_parse_function_with_multiple_string_args(self, executor):
         """Test parsing a function with multiple string arguments."""
@@ -41,7 +42,7 @@ class TestExecutorParseFunctions:
         function_calls = [f"type_text(page_id={page_id},selector=#username,text=testuser)"]
 
         # Act
-        result = executor._parse_functions(function_calls)
+        result, errors = executor._parse_functions(function_calls)
 
         # Assert
         assert len(result) == 1
@@ -51,6 +52,7 @@ class TestExecutorParseFunctions:
         assert result[0].arguments["page_id"] == page_id
         assert result[0].arguments["selector"] == "#username"
         assert result[0].arguments["text"] == "testuser"
+        assert errors == []
 
     def test_parse_function_with_uuid_arg(self, executor):
         """Test parsing a function with UUID argument."""
@@ -59,7 +61,7 @@ class TestExecutorParseFunctions:
         function_calls = [f"click(page_id={page_id},selector=#button)"]
 
         # Act
-        result = executor._parse_functions(function_calls)
+        result, errors = executor._parse_functions(function_calls)
 
         # Assert
         assert len(result) == 1
@@ -68,6 +70,7 @@ class TestExecutorParseFunctions:
         assert isinstance(result[0].arguments["page_id"], UUID)
         assert result[0].arguments["page_id"] == page_id
         assert result[0].arguments["selector"] == "#button"
+        assert errors == []
 
     def test_parse_function_with_integer_args(self, executor):
         """Test parsing a function with integer arguments."""
@@ -76,7 +79,7 @@ class TestExecutorParseFunctions:
         function_calls = [f"scroll(page_id={page_id},x=0,y=500)"]
 
         # Act
-        result = executor._parse_functions(function_calls)
+        result, errors = executor._parse_functions(function_calls)
 
         # Assert
         assert len(result) == 1
@@ -87,6 +90,7 @@ class TestExecutorParseFunctions:
         assert result[0].arguments["y"] == 500
         assert isinstance(result[0].arguments["x"], int)
         assert isinstance(result[0].arguments["y"], int)
+        assert errors == []
 
     def test_parse_multiple_functions(self, executor):
         """Test parsing multiple function calls."""
@@ -98,12 +102,13 @@ class TestExecutorParseFunctions:
         ]
 
         # Act
-        result = executor._parse_functions(function_calls)
+        result, errors = executor._parse_functions(function_calls)
 
         # Assert
         assert len(result) == 2
         assert result[0].function.__name__ == "go_to_url"
         assert result[1].function.__name__ == "scroll"
+        assert errors == []
 
     def test_parse_function_unknown_function_name(self, executor):
         """Test parsing with unknown function name raises ValueError."""
@@ -122,7 +127,7 @@ class TestExecutorParseFunctions:
         function_calls = [f"type_text( page_id = {page_id} , selector = #username , text = testuser )"]
 
         # Act
-        result = executor._parse_functions(function_calls)
+        result, errors = executor._parse_functions(function_calls)
 
         # Assert
         assert len(result) == 1
@@ -130,6 +135,7 @@ class TestExecutorParseFunctions:
         assert isinstance(result[0].arguments["page_id"], UUID)
         assert result[0].arguments["selector"] == "#username"
         assert result[0].arguments["text"] == "testuser"
+        assert errors == []
 
     def test_parse_function_empty_list(self, executor):
         """Test parsing empty function list returns empty result."""
@@ -137,10 +143,52 @@ class TestExecutorParseFunctions:
         function_calls = []
 
         # Act
-        result = executor._parse_functions(function_calls)
+        result, errors = executor._parse_functions(function_calls)
 
         # Assert
         assert result == []
+        assert errors == []
+
+    def test_parse_function_with_equals_in_value(self, executor):
+        """Test parsing handles equals sign in argument values (e.g., selector=href=[])."""
+        # Arrange
+        page_id = uuid4()
+        function_calls = [f"click(page_id={page_id},selector=[href=/about])"]
+
+        # Act
+        result, errors = executor._parse_functions(function_calls)
+
+        # Assert
+        assert len(result) == 1
+        assert result[0].function.__name__ == "click"
+        assert len(result[0].arguments) == 2
+        assert isinstance(result[0].arguments["page_id"], UUID)
+        assert result[0].arguments["page_id"] == page_id
+        assert result[0].arguments["selector"] == "[href=/about]"
+        assert errors == []
+
+    def test_parse_function_with_quoted_values(self, executor):
+        """Test parsing strips quotes from argument values (handles LLM-generated quotes)."""
+        # Arrange
+        page_id = uuid4()
+        function_calls = [
+            f"click(page_id={page_id},selector='a[href=\"/login\"]')",
+            f"type_text(page_id={page_id},selector=\"#username\",text='admin')"
+        ]
+
+        # Act
+        result, errors = executor._parse_functions(function_calls)
+
+        # Assert
+        assert len(result) == 2
+        # First function - single quotes around value with double quotes inside
+        assert result[0].function.__name__ == "click"
+        assert result[0].arguments["selector"] == 'a[href="/login"]'
+        # Second function - double quotes around selector, single quotes around text
+        assert result[1].function.__name__ == "type_text"
+        assert result[1].arguments["selector"] == "#username"
+        assert result[1].arguments["text"] == "admin"
+        assert errors == []
 
 
 class TestExecutorExecuteFunction:
@@ -155,6 +203,7 @@ class TestExecutorExecuteFunction:
     async def test_execute_function_success(self, executor):
         """Test executing a function that succeeds."""
         # Arrange
+        context_id = uuid4()
         mock_function = AsyncMock(return_value=ToolResponse(
             success=True,
             content="Function executed successfully"
@@ -165,18 +214,19 @@ class TestExecutorExecuteFunction:
         )
 
         # Act
-        result = await executor._execute_function(parsed_function)
+        result = await executor._execute_function(parsed_function, context_id=context_id)
 
         # Assert
         assert isinstance(result, ToolResponse)
         assert result.success is True
         assert result.content == "Function executed successfully"
-        mock_function.assert_called_once_with(arg1="value1", arg2="value2")
+        mock_function.assert_called_once_with(arg1="value1", arg2="value2", context_id=context_id)
 
     @pytest.mark.asyncio
     async def test_execute_function_failure(self, executor):
         """Test executing a function that fails."""
         # Arrange
+        context_id = uuid4()
         mock_function = AsyncMock(return_value=ToolResponse(
             success=False,
             content="ERROR: Function failed"
@@ -187,18 +237,19 @@ class TestExecutorExecuteFunction:
         )
 
         # Act
-        result = await executor._execute_function(parsed_function)
+        result = await executor._execute_function(parsed_function, context_id=context_id)
 
         # Assert
         assert isinstance(result, ToolResponse)
         assert result.success is False
         assert "ERROR" in result.content
-        mock_function.assert_called_once_with(arg1="value1")
+        mock_function.assert_called_once_with(arg1="value1", context_id=context_id)
 
     @pytest.mark.asyncio
     async def test_execute_function_no_args(self, executor):
         """Test executing a function with no arguments."""
         # Arrange
+        context_id = uuid4()
         mock_function = AsyncMock(return_value=ToolResponse(
             success=True,
             content="No args function"
@@ -209,12 +260,12 @@ class TestExecutorExecuteFunction:
         )
 
         # Act
-        result = await executor._execute_function(parsed_function)
+        result = await executor._execute_function(parsed_function, context_id=context_id)
 
         # Assert
         assert isinstance(result, ToolResponse)
         assert result.success is True
-        mock_function.assert_called_once_with()
+        mock_function.assert_called_once_with(context_id=context_id)
 
 
 class TestExecutorExecuteRequest:
@@ -233,17 +284,19 @@ class TestExecutorExecuteRequest:
     ):
         """Test executing a single successful function call."""
         # Arrange
+        context_id = uuid4()
         mock_function = AsyncMock()
-        mock_parse_functions.return_value = [
-            ParsedFunction(function=mock_function, arguments={"url": "https://github.com"})
-        ]
+        mock_parse_functions.return_value = (
+            [ParsedFunction(function=mock_function, arguments={"url": "https://github.com"})],
+            []
+        )
         mock_execute_function.return_value = ToolResponse(
             success=True,
             content="Success"
         )
 
         # Act
-        result = await executor.execute_request(["go_to_url(url=https://github.com)"])
+        result = await executor.execute_request(["go_to_url(url=https://github.com)"], context_id=context_id)
 
         # Assert
         assert len(result) == 1
@@ -260,13 +313,17 @@ class TestExecutorExecuteRequest:
     ):
         """Test executing multiple successful function calls."""
         # Arrange
+        context_id = uuid4()
         mock_function1 = AsyncMock()
         mock_function2 = AsyncMock()
         page_id = uuid4()
-        mock_parse_functions.return_value = [
-            ParsedFunction(function=mock_function1, arguments={"url": "https://github.com"}),
-            ParsedFunction(function=mock_function2, arguments={"page_id": page_id, "x": 0, "y": 100})
-        ]
+        mock_parse_functions.return_value = (
+            [
+                ParsedFunction(function=mock_function1, arguments={"url": "https://github.com"}),
+                ParsedFunction(function=mock_function2, arguments={"page_id": page_id, "x": 0, "y": 100})
+            ],
+            []
+        )
         mock_execute_function.side_effect = [
             ToolResponse(success=True, content="First success"),
             ToolResponse(success=True, content="Second success")
@@ -276,7 +333,7 @@ class TestExecutorExecuteRequest:
         result = await executor.execute_request([
             "go_to_url(url=https://github.com)",
             f"scroll(page_id={page_id},x=0,y=100)"
-        ])
+        ], context_id=context_id)
 
         # Assert
         assert len(result) == 2
@@ -294,15 +351,19 @@ class TestExecutorExecuteRequest:
     ):
         """Test that execution stops when a function fails."""
         # Arrange
+        context_id = uuid4()
         mock_function1 = AsyncMock()
         mock_function2 = AsyncMock()
         mock_function3 = AsyncMock()
         page_id = uuid4()
-        mock_parse_functions.return_value = [
-            ParsedFunction(function=mock_function1, arguments={"url": "https://github.com"}),
-            ParsedFunction(function=mock_function2, arguments={"page_id": page_id, "selector": "#missing-button"}),
-            ParsedFunction(function=mock_function3, arguments={"page_id": page_id, "selector": "#username", "text": "test"})
-        ]
+        mock_parse_functions.return_value = (
+            [
+                ParsedFunction(function=mock_function1, arguments={"url": "https://github.com"}),
+                ParsedFunction(function=mock_function2, arguments={"page_id": page_id, "selector": "#missing-button"}),
+                ParsedFunction(function=mock_function3, arguments={"page_id": page_id, "selector": "#username", "text": "test"})
+            ],
+            []
+        )
         mock_execute_function.side_effect = [
             ToolResponse(success=True, content="First success"),
             ToolResponse(success=False, content="ERROR: Second failed"),
@@ -314,7 +375,7 @@ class TestExecutorExecuteRequest:
             "go_to_url(url=https://github.com)",
             f"click(page_id={page_id},selector=#missing-button)",
             f"type_text(page_id={page_id},selector=#username,text=test)"
-        ])
+        ], context_id=context_id)
 
         # Assert
         assert len(result) == 2  # Only first two executed
@@ -331,10 +392,11 @@ class TestExecutorExecuteRequest:
     ):
         """Test executing empty function list."""
         # Arrange
-        mock_parse_functions.return_value = []
+        context_id = uuid4()
+        mock_parse_functions.return_value = ([], [])
 
         # Act
-        result = await executor.execute_request([])
+        result = await executor.execute_request([], context_id=context_id)
 
         # Assert
         assert result == []
@@ -347,9 +409,10 @@ class TestExecutorExecuteRequest:
     ):
         """Test that parsing errors propagate correctly."""
         # Arrange
+        context_id = uuid4()
         mock_parse_functions.side_effect = ValueError("Unknown function")
 
         # Act & Assert
         with pytest.raises(ValueError) as exc_info:
-            await executor.execute_request(["unknown_func(arg)"])
+            await executor.execute_request(["unknown_func(arg)"], context_id=context_id)
         assert "Unknown function" in str(exc_info.value)
