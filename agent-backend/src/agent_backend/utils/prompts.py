@@ -12,11 +12,11 @@ REACT_PLANNING_SYSTEM_PROMPT="You are a thoughtful and precise planning agent. Y
     + '  "observation": "<your observation of the user request>",\n'\
     + '  "plan": "<your thought process on how to achieve the request>",'\
     + '  "function_calls": [\n'\
-    + '    "function_name(arg1,arg2,...)",\n'\
+    + '    "function_name(arg1=value1,arg2=value2,...)",\n'\
     + '    "..."\n'\
     + '  ]\n'\
     +"}\n\n"\
-    +"Some important notes: arguments should be passed to functions in the order they appear in the function declaration, function calls are simple (do not specify which argument is which, do not wrap strings in quotes, all arguments are plain text), and you must only use functions that are available to you. "\
+    +"Some important notes: function calls are simple (do not specify which argument is which, do not wrap strings in quotes, all arguments are plain text), and you must only use functions that are available to you. "\
     +"If you believe the request is complete, you should add an additional 'done' field to the JSON with the value set to true. In this case, function_calls can be empty, and plan and observation may be anything you please. Note that if the user request is not one that requires action, you should just be done immediately.\n"\
     +"Always ensure your response is valid JSON. If you encounter an error, you will be prompted to try again."\
     +f"Here are the functions available to you: {all_playwright_tools}\n"

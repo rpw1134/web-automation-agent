@@ -34,7 +34,9 @@ class Executor:
             if not function:
                 raise ValueError(f"Function {func_name} not found in function mappings.")
             func_args = func_call[len(func_name)+1:-1].split(",")
-            func_args_parsed = []
+            func_arg_names = [func_arg.split("=")[0].strip() for func_arg in func_args]
+            func_arg_values = [func_arg.split("=")[1].strip() for func_arg in func_args]
+            func_args_parsed = {}
 
             # Get tool definition to understand parameter types
             tool_def = playwright_function_names_to_tools.get(func_name, None)
@@ -45,15 +47,15 @@ class Executor:
             for i, property in enumerate(tool_def.parameters.properties.values()):
                 match property.get("type"):
                     case "string":
-                        func_args_parsed.append(str(func_args[i].strip()))
+                        func_args_parsed[func_arg_names[i]] = str(func_arg_values[i])
                     case "integer":
-                        func_args_parsed.append(int(func_args[i].strip()))
+                        func_args_parsed[func_arg_names[i]] = int(func_arg_values[i])
                     case "boolean":
-                        func_args_parsed.append(bool(func_args[i].strip()))
+                        func_args_parsed[func_arg_names[i]] = bool(func_arg_values[i])
                     case "float":
-                        func_args_parsed.append(float(func_args[i].strip()))
+                        func_args_parsed[func_arg_names[i]] = float(func_arg_values[i])
                     case "UUID":
-                        func_args_parsed.append(UUID(func_args[i].strip()))
+                        func_args_parsed[func_arg_names[i]] = UUID(func_arg_values[i])
                     case _:
                         raise ValueError(f"Unsupported parameter type: {property.get('type')}")
 
@@ -63,7 +65,7 @@ class Executor:
     
     async def _execute_function(self, parsed_function: ParsedFunction)->ToolResponse:
         function = parsed_function.function
-        return await function(*parsed_function.arguments)
+        return await function(**parsed_function.arguments)
     
     async def execute_request(self, function_calls: List[str]) -> List[ToolResponse]:
         """

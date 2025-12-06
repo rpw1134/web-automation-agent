@@ -1,12 +1,12 @@
 from dataclasses import dataclass
-from typing import Any, List, Awaitable
+from typing import Any, Awaitable, Dict
 from collections.abc import Callable
 from ..types.tool import ToolResponse
 
 @dataclass
 class ParsedFunction:
     function: Callable[..., Awaitable[ToolResponse]]
-    arguments: List[Any]
+    arguments: Dict[str, Any]
 
 @dataclass
 class PlanResponse:
