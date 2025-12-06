@@ -9,15 +9,21 @@ from dataclasses import asdict
 
 if TYPE_CHECKING:
     from .Executor import Executor
+    from .BrowserManager import BrowserManager
 
 class Planner:
-    def __init__(self, api_key: str, executor: "Executor | None" = None):
+    def __init__(self, api_key: str, executor: "Executor | None" = None, browser_manager: "BrowserManager | None" = None):
         self.client = AsyncClient(api_key=api_key)
         self._executor: "Executor | None" = executor
+        self._browser_manager: "BrowserManager | None" = browser_manager  # Placeholder for potential future use
     
     def set_executor(self, executor: "Executor") -> None:
         """Set the executor instance (for dependency injection after construction)."""
         self._executor = executor
+        
+    def set_browser_manager(self, browser_manager: "BrowserManager") -> None:
+        """Set the browser manager instance (for dependency injection after construction)."""
+        self._browser_manager = browser_manager
     
     @property
     def executor(self) -> "Executor":
@@ -25,6 +31,13 @@ class Planner:
         if self._executor is None:
             raise RuntimeError("Executor not set. Call set_executor() first.")
         return self._executor
+    
+    @property
+    def browser_manager(self) -> "BrowserManager":
+        """Get the browser manager instance."""
+        if self._browser_manager is None:
+            raise RuntimeError("BrowserManager not set. Call set_browser_manager() first.")
+        return self._browser_manager
     
     async def react_loop(self, user_request: str):
         # Send a PLAN request to OpenAI
