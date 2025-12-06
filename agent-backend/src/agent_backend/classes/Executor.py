@@ -46,10 +46,10 @@ class Executor:
 
             # Parse each argument according to its type from tool definition
             for i, property in enumerate(func_arg_names):
-                property = tool_def.parameters.properties.get(func_arg_names[i], None)
-                if not property:
-                    raise ValueError(f"Parameter {func_arg_names[i]} not found in tool definition for function {func_name}.")
                 try:
+                    property = tool_def.parameters.properties.get(func_arg_names[i], None)
+                    if not property:
+                        raise ValueError(f"Parameter {func_arg_names[i]} not found in tool definition for function {func_name}.")
                     match property.get("type"):
                         case "string":
                             func_args_parsed[func_arg_names[i]] = str(func_arg_values[i])
@@ -79,7 +79,14 @@ class Executor:
     
     async def _execute_function(self, parsed_function: ParsedFunction, context_id: UUID)->ToolResponse:
         function = parsed_function.function
-        return await function(**parsed_function.arguments, context_id=context_id)
+        try:
+            res = await function(**parsed_function.arguments, context_id=context_id)
+        except Exception as e:
+            return ToolResponse(
+                success=False,
+                content=f"Error executing function {function.__name__}: {str(e)}"
+            )
+        return res
     
     async def execute_request(self, function_calls: List[str], context_id: UUID) -> List[ToolResponse]:
         """

@@ -1,6 +1,7 @@
 from openai import AsyncClient
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionMessage
 from ..utils.prompts import REACT_PLANNING_SYSTEM_PROMPT
+from ..utils.llm_utils import parse_delimited_response
 from typing import List, Union, TYPE_CHECKING
 from ..types.llm import PlanResponse, PlanResponseError
 from ..types.tool import ToolResponse
@@ -64,7 +65,7 @@ class Planner:
             # Get observation, plan, and proposed action(s)
             plan: str|None = (await self.client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=[*context, {"role": "assistant", "content": "I must remember to respond in valid JSON format."}],
+                messages=[*context, {"role": "assistant", "content": "I must remember to respond using the delimiter-based format with proper sections."}],
                 max_tokens=1000,
                 temperature=0.7
             )).choices[0].message.content
@@ -104,28 +105,9 @@ class Planner:
         Function calls are left as raw strings to be parsed by the Executor.
 
         Args:
-            plan_response: JSON string response from LLM
+            plan_response: Delimiter-based string response from LLM
 
         Returns:
             PlanResponse with raw function call strings, or PlanResponseError if parsing fails
         """
-        plan_dict: dict
-        plan_error: PlanResponseError
-        try:
-            plan_dict = json.loads(str(plan_response))
-            plan: str = plan_dict.get("plan", "")
-            observation: str = plan_dict.get("observation", "")
-            
-            # Pass raw function call strings - Executor will parse them
-            function_calls: list[str] = plan_dict.get("function_calls", [])
-            return PlanResponse(
-                observation=observation,
-                plan=plan,
-                function_calls=function_calls,
-                done=True if plan_dict.get("plan", "").lower() == "done" else False
-            )
-        except json.JSONDecodeError:
-            plan_error: PlanResponseError = PlanResponseError(
-                error="Failed to parse plan JSON. Please carefully construct your plan and action."
-            )
-            return plan_error
+        return parse_delimited_response(plan_response)

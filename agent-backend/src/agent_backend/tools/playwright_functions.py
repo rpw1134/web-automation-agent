@@ -1,9 +1,8 @@
-from playwright.async_api import Browser
+from playwright.async_api import Browser, Locator, Page
 from uuid import UUID
-from playwright.async_api import BrowserContext, Page
 from typing import Tuple, Any
 from ..types.tool import Tool, Parameters, ToolResponse
-from ..utils.browser_functions import get_browser_context_by_id, create_browser_context, delete_browser_context_by_id, get_page_by_id, create_page, delete_page_by_page_id
+from ..utils.browser_functions import get_browser_context_by_id, create_browser_context, delete_browser_context_by_id, get_page_by_id, create_page, delete_page_by_page_id, create_new_locators_for_page, get_locator_by_id
 from typing import Dict, List, Callable, Awaitable
 
 
@@ -36,38 +35,38 @@ go_to_url_tool = Tool(
 )
     
 
-async def click(context_id: UUID, page_id: UUID, selector: str) -> ToolResponse:
-    """Click an element on a page.
-    Args:
-        context_id: The UUID of the browser context containing the page.
-        page_id: The UUID of the page where the click will occur.
-        selector: The selector of the element to click.
-    Returns:
-        ToolResponse: A dict with success status and message.
-    """
-    try:
-        page: Page = await get_page_by_id(context_id, page_id)
-        await page.click(selector=selector, timeout=5000)
-        return ToolResponse(success=True, content=f"Successfully clicked element with selector '{selector}'.")
-    except TimeoutError:
-        return ToolResponse(success=False, content=f"ERROR: Request timed out or element with selector '{selector}' not found for clicking. This generally implies either the element is not loaded or there are multiple elements matching your selector. Adding a :visible to your selector may help.")
-    except Exception as e:
-        return ToolResponse(success=False, content=f"ERROR: Unexpected error clicking element with selector '{selector}': {str(e)}")
+# async def click(context_id: UUID, page_id: UUID, selector: str) -> ToolResponse:
+#     """Click an element on a page.
+#     Args:
+#         context_id: The UUID of the browser context containing the page.
+#         page_id: The UUID of the page where the click will occur.
+#         selector: The selector of the element to click.
+#     Returns:
+#         ToolResponse: A dict with success status and message.
+#     """
+#     try:
+#         page: Page = await get_page_by_id(context_id, page_id)
+#         await page.click(selector=selector, timeout=5000)
+#         return ToolResponse(success=True, content=f"Successfully clicked element with selector '{selector}'.")
+#     except TimeoutError:
+#         return ToolResponse(success=False, content=f"ERROR: Request timed out or element with selector '{selector}' not found for clicking. This generally implies either the element is not loaded or there are multiple elements matching your selector. Adding a :visible to your selector may help.")
+#     except Exception as e:
+#         return ToolResponse(success=False, content=f"ERROR: Unexpected error clicking element with selector '{selector}': {str(e)}")
 
-click_tool = Tool(
-    type="function",
-    name="click",
-    description="Click an element on a page using a CSS selector",
-    parameters=Parameters(
-        type="object",
-        properties={
-            "page_id": {"type": "UUID", "description": "The UUID of the page where the click will occur."},
-            "selector": {"type": "string", "description": "The selector of the element to click."}
-        },
-        required=["page_id", "selector"]
-    ),
-    strict=True
-)
+# click_tool = Tool(
+#     type="function",
+#     name="click",
+#     description="Click an element on a page using a CSS selector",
+#     parameters=Parameters(
+#         type="object",
+#         properties={
+#             "page_id": {"type": "UUID", "description": "The UUID of the page where the click will occur."},
+#             "selector": {"type": "string", "description": "The selector of the element to click."}
+#         },
+#         required=["page_id", "selector"]
+#     ),
+#     strict=True
+# )
 
 async def type_text(context_id: UUID, page_id: UUID, selector: str, text: str) -> ToolResponse:
     """Type text into an input field on a page.
@@ -355,7 +354,7 @@ get_open_pages_tool = Tool(
     strict=True
 )
 
-async def get_element_by(context_id: UUID, page_id: UUID, query: str, query_by: str) -> ToolResponse:
+async def get_visible_elements_by(context_id: UUID, page_id: UUID, query: str, query_by: str) -> ToolResponse:
     """Get an element on a page by various query methods.
     Args:
         context_id: The UUID of the browser context containing the page.
@@ -383,18 +382,24 @@ async def get_element_by(context_id: UUID, page_id: UUID, query: str, query_by: 
             locator = page.get_by_label(query)
         else:
             locator = page.get_by_text(query)
+        
+        # Filter by visible elements
+        visible_locators = [locator for locator in await locator.all() if await locator.is_visible()]
 
-        # Check if element exists
-        count = await locator.count()
+        # Check if element exists and is visible
+        count = len(visible_locators)
         if count == 0:
             return ToolResponse(
                 success=False,
                 content=f"ERROR: No element found with {query_by}='{query}'."
             )
-
+        
+        # Create locators in BrowserManager
+        new_ids = await create_new_locators_for_page(page_id, visible_locators)
+        
         return ToolResponse(
             success=True,
-            content=f"Found {count} element(s) with {query_by}='{query}'."
+            content=f"Found {count} element(s) with {query_by}='{query}'. Locator IDs: {new_ids}"
         )
     except TimeoutError:
         return ToolResponse(
@@ -407,10 +412,10 @@ async def get_element_by(context_id: UUID, page_id: UUID, query: str, query_by: 
             content=f"ERROR: Unexpected error while searching for element with {query_by}='{query}': {str(e)}"
         )
 
-get_element_by_tool = Tool(
+get_visible_elements_by_tool = Tool(
     type="function",
-    name="get_element_by",
-    description="Get an element on a page using different query methods (CSS selector, label, or text)",
+    name="get_visible_elements_by",
+    description="Get visible elements on a page using different query methods (CSS selector, label, or text)",
     parameters=Parameters(
         type="object",
         properties={
@@ -423,9 +428,78 @@ get_element_by_tool = Tool(
     strict=True
 )
 
+# NEED CONTEXT ID FOR GENERALIZED FUNCTION CALLING IN EXECUTOR
+async def click_by_locator(context_id, page_id: UUID, locator_id: UUID) -> ToolResponse:
+    """Click an element on a page using a stored locator ID.
+    Args:
+        page_id: The UUID of the page where the click will occur.
+        locator_id: The UUID of the stored locator to click.
+    Returns:
+        ToolResponse: A dict with success status and message.
+    """
+    try:
+        locator: Locator = get_locator_by_id(page_id, locator_id)
+        await locator.click(timeout=5000)
+        return ToolResponse(success=True, content=f"Successfully clicked element with locator ID '{locator_id}'.")
+    except TimeoutError:
+        return ToolResponse(success=False, content=f"ERROR: Request timed out or element with locator ID '{locator_id}' not found for clicking.")
+    except Exception as e:
+        return ToolResponse(success=False, content=f"ERROR: Unexpected error clicking element with locator ID '{locator_id}': {str(e)}")
+    
+    
+click_by_locator_tool = Tool(
+    type="function",
+    name="click_by_locator",
+    description="Click on an element by its locator id",
+    parameters=Parameters(
+        type="object",
+        properties={
+            "page_id": {"type": "UUID", "description": "The UUID of the page to query."},
+            "locator_id": {"type": "UUID", "description": "The UUID of the stored locator to click."}
+        },
+        required=["page_id", "locator_id"]
+    ),
+    strict=True
+)    
+
+# NEED CONTEXT ID FOR GENERALIZED FUNCTION CALLING IN EXECUTOR
+async def fill_field_by_locator(context_id, page_id: UUID, locator_id: UUID, text: str) -> ToolResponse:
+    """Fill an input field on a page using a stored locator ID.
+    Args:
+        context_id: The UUID of the browser context containing the page.
+        page_id: The UUID of the page where the filling will occur.
+        locator_id: The UUID of the stored locator to fill.
+        text: The text to fill into the input field.
+    Returns:
+        ToolResponse: A dict with success status and message.
+    """
+    try:
+        locator: Locator = get_locator_by_id(page_id, locator_id)
+        await locator.fill(value=text, timeout=5000)
+        return ToolResponse(success=True, content=f"Successfully filled text '{text}' into element with locator ID '{locator_id}'.")
+    except TimeoutError:
+        return ToolResponse(success=False, content=f"ERROR: Request timed out or input field with locator ID '{locator_id}' not found for filling.")
+    except Exception as e:
+        return ToolResponse(success=False, content=f"ERROR: Unexpected error filling element with locator ID '{locator_id}': {str(e)}")
+
+fill_field_by_locator_tool = Tool(
+    type="function",
+    name="fill_field_by_locator",
+    description="Fill a field of an element by its locator id",
+    parameters=Parameters(
+        type="object",
+        properties={
+            "page_id": {"type": "UUID", "description": "The UUID of the page to query."},
+            "locator_id": {"type": "UUID", "description": "The UUID of the stored locator to fill."}
+        },
+        required=["page_id", "locator_id"]
+    ),
+    strict=True
+)    
+
 playwright_function_names_to_functions: Dict[str, Callable[..., Awaitable[ToolResponse]]] = {
     "go_to_url": go_to_url,
-    "click": click,
+    # "click": click,
     "type_text": type_text,
     "extract_text": extract_text,
     "wait_for_selector": wait_for_selector,
@@ -435,11 +509,13 @@ playwright_function_names_to_functions: Dict[str, Callable[..., Awaitable[ToolRe
     "reload_page": reload_page,
     "screenshot_page": screenshot_page,
     "get_open_pages": get_open_pages,
-    "get_element_by": get_element_by
+    "get_visible_elements_by": get_visible_elements_by,
+    "click_by_locator": click_by_locator,
+    "fill_field_by_locator": fill_field_by_locator
 }
 playwright_function_names_to_tools: Dict[str, Tool] = {
     "go_to_url": go_to_url_tool,
-    "click": click_tool,
+    # "click": click_tool,
     "type_text": type_text_tool,
     "extract_text": extract_text_tool,
     "wait_for_selector": wait_for_selector_tool,
@@ -449,7 +525,9 @@ playwright_function_names_to_tools: Dict[str, Tool] = {
     "reload_page": reload_page_tool,
     "screenshot_page": screenshot_page_tool,
     "get_open_pages": get_open_pages_tool,
-    "get_element_by": get_element_by_tool
+    "get_visible_elements_by": get_visible_elements_by_tool,
+    "click_by_locator": click_by_locator_tool,
+    "fill_field_by_locator": fill_field_by_locator_tool
 }
 
 all_playwright_tools: List[Tool] = list(playwright_function_names_to_tools.values())

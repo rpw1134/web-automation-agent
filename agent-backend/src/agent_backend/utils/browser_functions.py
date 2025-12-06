@@ -1,6 +1,7 @@
-from playwright.async_api import Page, BrowserContext
+from playwright.async_api import Page, BrowserContext, Locator
 from uuid import UUID
-from typing import Tuple, TYPE_CHECKING
+from typing import Tuple, TYPE_CHECKING, List
+from asyncio import gather
 
 if TYPE_CHECKING:
     from ..classes.BrowserManager import BrowserManager
@@ -48,3 +49,14 @@ async def create_page(context_id: UUID) -> Tuple[UUID, Page]:
 async def delete_page_by_page_id(context_id: UUID, page_id: UUID):
     """Delete a page by its ID within a specific browser context."""
     await _get_browser_manager().delete_page_by_page_id(context_id, page_id)
+    
+async def create_new_locators_for_page(page_id: UUID, locators: List[Locator]):
+    """Create a new locators dictionary for a specific page."""
+    browser_manager = _get_browser_manager()
+    returned_ids = await gather(*(browser_manager.store_locator(page_id, locator) for locator in locators))
+    print(returned_ids)
+    return returned_ids
+
+def get_locator_by_id(page_id: UUID, locator_id: UUID) -> Locator:
+    """Retrieve a locator by its ID within a specific page."""
+    return _get_browser_manager().get_locator_by_id(page_id, locator_id)

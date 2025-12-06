@@ -253,7 +253,7 @@ class BrowserManager:
             if context_id in self._pages:
                 del self._pages[context_id]
                 
-    async def get_locator_by_id(self, page_id: UUID, locator_id: UUID) -> Locator:
+    def get_locator_by_id(self, page_id: UUID, locator_id: UUID) -> Locator:
         """
         Retrieve a locator by its ID within a specific page.
 
