@@ -65,7 +65,7 @@ class Planner:
             
             # Get observation, plan, and proposed action(s)
             plan: str|None = (await self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 messages=[*context, {"role": "assistant", "content": "I must remember to respond using the delimiter-based format with proper sections."}],
                 max_tokens=1000,
                 temperature=0.7
