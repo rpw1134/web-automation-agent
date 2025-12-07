@@ -109,7 +109,7 @@ async def get_labeled_elements(context_id: UUID, page_id: UUID):
         
         desc = ' '.join(desc_parts) if desc_parts else '(no label)'
         
-        formatted_elements.append(f"[{i}] {el['selector']} - {desc}")
+        formatted_elements.append(f"[{i}] Selector to use: {el['selector']} - Description: {desc}")
     
     # Ingestible format
     return '\n'.join(formatted_elements)
