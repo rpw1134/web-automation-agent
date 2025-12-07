@@ -65,7 +65,7 @@ class Planner:
             
             # Get observation, plan, and proposed action(s)
             plan: str|None = (await self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[*context, {"role": "assistant", "content": "I must remember to respond using the delimiter-based format with proper sections."}],
                 max_tokens=1000,
                 temperature=0.7
@@ -74,7 +74,6 @@ class Planner:
             # Remove the last entry to avoid context bloating
             context.pop()
             
-            print(f"[Planner.react_loop] Raw Plan: {plan}")
             plan_response = self._parse_plan(plan)
             print(f"[Planner.react_loop] Plan Response: {plan_response}")
             

@@ -66,12 +66,14 @@ async def get_labeled_elements(context_id: UUID, page_id: UUID):
     page: Page = _get_browser_manager().get_page_by_id(context_id=context_id, page_id=page_id)
     elements = await page.evaluate("""() => {
         const interactive = [];
+        const viewportHeight = window.innerHeight;
         
         document.querySelectorAll('a, button, input, select, textarea, [role="button"]').forEach(el => {
             const rect = el.getBoundingClientRect();
             
             // If not visible, skip
             if (rect.width === 0 || rect.height === 0) return;
+            if (rect.bottom < 0 || rect.top > viewportHeight) return;
             
             const tag = el.tagName.toLowerCase();
             const text = (el.innerText || el.value || el.placeholder || '').trim().slice(0, 60);
@@ -113,3 +115,12 @@ async def get_labeled_elements(context_id: UUID, page_id: UUID):
     
     # Ingestible format
     return '\n'.join(formatted_elements)
+
+async def detect_url_change(context_id: UUID, page_id: UUID, old_url: str) -> str:
+    """Detect if the URL of the page has changed from the old URL."""
+    page: Page = _get_browser_manager().get_page_by_id(context_id=context_id, page_id=page_id)
+    current_url = page.url
+    print(f"[detect_url_change] Old URL: {old_url}, Current URL: {current_url}")
+    if current_url != old_url:
+        return await get_labeled_elements(context_id,page_id)
+    return ""

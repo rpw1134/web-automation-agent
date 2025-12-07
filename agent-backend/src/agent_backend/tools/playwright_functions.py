@@ -2,8 +2,9 @@ from playwright.async_api import Browser, Locator, Page
 from uuid import UUID
 from typing import Any
 from ..types.tool import Tool, Parameters, ToolResponse
-from ..utils.browser_functions import get_browser_context_by_id, get_page_by_id, create_page, create_new_locators_for_page, get_locator_by_id, get_labeled_elements
+from ..utils.browser_functions import get_browser_context_by_id, get_page_by_id, create_page, create_new_locators_for_page, get_locator_by_id, get_labeled_elements, detect_url_change
 from typing import Dict, List, Callable, Awaitable
+import time
 
 
 async def go_to_url(context_id: UUID, url: str) -> ToolResponse:
@@ -47,8 +48,14 @@ async def click(context_id: UUID, page_id: UUID, selector: str) -> ToolResponse:
     """
     try:
         page: Page = await get_page_by_id(context_id, page_id)
+        
+        # get current URL to detect page change
+        current_url = page.url
         await page.click(selector=selector, timeout=5000)
-        return ToolResponse(success=True, content=f"Successfully clicked element with selector '{selector}'.")
+        
+        # check if URL has changed, if so, return new elements
+        labeled_elements = await detect_url_change(context_id, page_id, current_url)
+        return ToolResponse(success=True, content=f"Successfully clicked element with selector '{selector}'. {"" if not labeled_elements else f'Page URL changed to: {page.url}. New reactive elements: {labeled_elements}'}")
     except TimeoutError:
         return ToolResponse(success=False, content=f"ERROR: Request timed out or element with selector '{selector}' not found for clicking. This generally implies either the element is not loaded or there are multiple elements matching your selector. Adding a :visible to your selector may help.")
     except Exception as e:
@@ -81,6 +88,7 @@ async def type_text(context_id: UUID, page_id: UUID, selector: str, text: str) -
     """
     try:
         page: Page = await get_page_by_id(context_id, page_id)
+        # check if URL has changed, if so, return new elements
         await page.fill(selector=selector, value=text, timeout=5000)
         return ToolResponse(success=True, content=f"Successfully typed text '{text}' into element with selector '{selector}'.")
     except TimeoutError:
@@ -174,6 +182,62 @@ wait_for_selector_tool = Tool(
     strict=True
 )
 
+async def wait_for(context_id: UUID, page_id: UUID, timeout: int = 5000) -> ToolResponse:
+    """Wait for a given time if unsure of page stability.
+    Args:
+        context_id: The UUID of the browser context containing the page.
+        page_id: The UUID of the page to wait on.
+        selector: The selector of the element to wait for.
+        timeout: Maximum time to wait in milliseconds. Default is 5000ms.
+    Returns:
+        ToolResponse: A dict with success status and message.
+    """
+    time.sleep(timeout / 1000)
+    return ToolResponse(success=True, content=f"Waited for {timeout} milliseconds.")
+
+wait_for_tool = Tool(
+    type="function",
+    name="wait_for",
+    description="Wait for a given time if unsure of page stability",
+    parameters=Parameters(
+        type="object",
+        properties={
+            "page_id": {"type": "UUID", "description": "The UUID of the page to wait on."},
+            "timeout": {"type": "integer", "description": "Maximum time to wait in milliseconds. Default is 5000ms."}
+        },
+        required=["page_id"]
+    ),
+    strict=True
+)
+
+async def get_elements_selectors_on_page(context_id: UUID, page_id: UUID) -> ToolResponse:
+    """Get all element selectors on a page.
+    Args:
+        context_id: The UUID of the browser context containing the page.
+        page_id: The UUID of the page to get elements from.
+    Returns:
+        ToolResponse: A dict with success status and list of selectors or error message.
+    """
+    try:
+        labeled_elements = await get_labeled_elements(context_id, page_id)
+        return ToolResponse(success=True, content=f"Reactive Elements on the page: {labeled_elements}")
+    except Exception as e:
+        return ToolResponse(success=False, content=f"ERROR: Unexpected error getting elements on page: {str(e)}")
+    
+get_elements_selectors_on_page_tool = Tool(
+    type="function",
+    name="get_elements_selectors_on_page",
+    description="Get all element selectors on a page",
+    parameters=Parameters(
+        type="object",
+        properties={
+            "page_id": {"type": "UUID", "description": "The UUID of the page to get elements from."}
+        },
+        required=["page_id"]
+    ),
+    strict=True
+)
+
 async def evaluate_script(context_id: UUID, page_id: UUID, script: str, arg: Any | None = None) -> ToolResponse:
     """Evaluate a JavaScript script on a page. Allows access to DOM and page context.
     Args:
@@ -185,10 +249,14 @@ async def evaluate_script(context_id: UUID, page_id: UUID, script: str, arg: Any
     """
     try:
         page: Page = await get_page_by_id(context_id, page_id)
+        
+        # get current URL to detect page change
+        current_url = page.url
         result = await page.evaluate(expression=script, arg=arg)
+        labeled_elements = await detect_url_change(context_id, page_id, current_url)
         if result is None:
-            return ToolResponse(success=True, content="Script evaluation completed with no return value.")
-        return ToolResponse(success=True, content=str(result))
+            return ToolResponse(success=True, content=f"Script evaluation completed with no return value. {'' if not labeled_elements else f'Page URL changed to: {page.url}. New reactive elements: {labeled_elements}'}")
+        return ToolResponse(success=True, content=str(result)+f"Page URL changed to: {page.url}. New reactive elements: {labeled_elements}" if labeled_elements else str(result))
     except Exception as e:
         return ToolResponse(success=False, content=f"ERROR: Unexpected error evaluating script: {str(e)}")
 
@@ -285,7 +353,9 @@ async def reload_page(context_id: UUID, page_id: UUID) -> ToolResponse:
     try:
         page: Page = await get_page_by_id(context_id, page_id)
         await page.reload()
-        return ToolResponse(success=True, content="Successfully reloaded the page.")
+        
+        labeled_elements = await get_labeled_elements(context_id, page_id)
+        return ToolResponse(success=True, content="Successfully reloaded the page. Reactive Elements on the page: {labeled_elements}")
     except Exception as e:
         return ToolResponse(success=False, content=f"ERROR: Unexpected error reloading page: {str(e)}")
 
@@ -571,6 +641,47 @@ screenshot_page_tool = Tool(
 #     strict=True
 # )
 
+async def press_key(context_id: UUID, page_id: UUID, selector: str, key: str) -> ToolResponse:
+    """Press a key on an element on a page.
+    Args:
+        context_id: The UUID of the browser context containing the page.
+        page_id: The UUID of the page where the key press will occur.
+        selector: The selector of the element to press the key on.
+        key: The key to press (e.g., "Enter", "Tab").
+    Returns:
+        ToolResponse: A dict with success status and message.
+    """
+    try:
+        page: Page = await get_page_by_id(context_id, page_id)
+        
+        # get current URL to detect page change
+        current_url = page.url
+        await page.press(selector=selector, key=key, timeout=5000)
+        
+        labeled_elements = await detect_url_change(context_id, page_id, current_url)
+        return ToolResponse(success=True, content=f"Successfully pressed key '{key}' on element with selector '{selector}'. {'' if not labeled_elements else f'Page URL changed to: {page.url}. New reactive elements: {labeled_elements}'}")
+    except TimeoutError:
+        return ToolResponse(success=False, content=f"ERROR: Request timed out or element with selector '{selector}' not found for key press.")
+    except Exception as e:
+        return ToolResponse(success=False, content=f"ERROR: Unexpected error pressing key '{key}' on element with selector '{selector}': {str(e)}")
+    
+press_key_tool = Tool(
+    type="function",
+    name="press_key",
+    description="Press a key on an element on a page using a CSS selector",
+    parameters=Parameters(
+        type="object",
+        properties={
+            "page_id": {"type": "UUID", "description": "The UUID of the page where the key press will occur."},
+            "selector": {"type": "string", "description": "The selector of the element to press the key on."},
+            "key": {"type": "string", "description": "The key to press (e.g., 'Enter', 'Tab')."}
+        },
+        required=["page_id", "selector", "key"]
+    ),
+    strict=True
+)
+
+
 playwright_function_names_to_functions: Dict[str, Callable[..., Awaitable[ToolResponse]]] = {
     "go_to_url": go_to_url,
     "click": click,
@@ -582,6 +693,9 @@ playwright_function_names_to_functions: Dict[str, Callable[..., Awaitable[ToolRe
     "set_viewport_size": set_viewport_size,
     "reload_page": reload_page,
     "screenshot_page": screenshot_page,
+    "press_key": press_key,
+    "wait_for": wait_for,
+    "get_elements_selectors_on_page": get_elements_selectors_on_page,
     # "get_open_pages": get_open_pages,
     # "get_visible_elements_by": get_visible_elements_by,
     # "click_by_locator": click_by_locator,
@@ -600,6 +714,9 @@ playwright_function_names_to_tools: Dict[str, Tool] = {
     "set_viewport_size": set_viewport_size_tool,
     "reload_page": reload_page_tool,
     "screenshot_page": screenshot_page_tool,
+    "press_key": press_key_tool,
+    "wait_for": wait_for_tool,
+    "get_elements_selectors_on_page": get_elements_selectors_on_page_tool,
     # "get_open_pages": get_open_pages_tool,
     # "get_visible_elements_by": get_visible_elements_by_tool,
     # "click_by_locator": click_by_locator_tool,
