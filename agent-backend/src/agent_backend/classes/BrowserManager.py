@@ -227,7 +227,7 @@ class BrowserManager:
             RuntimeError: If the browser instance is not initialized.
         """
         context_id = uuid4()
-        browser_context = await self.browser.new_context(viewport={'width': 1920, 'height': 1080})
+        browser_context = await self.browser.new_context()
         print("Created")
         self._contexts[context_id] = browser_context
         return (context_id, browser_context)

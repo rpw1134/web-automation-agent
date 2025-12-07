@@ -101,7 +101,7 @@ class Planner:
             context.append({"role":"system", "content": f"Action Response: {json.dumps([asdict(response) for response in execution_response])}"})
         self.browser_manager.get_browser_context_by_id(browser_context_id)
             
-            
+    
     def _parse_plan(self, plan_response: str|None)->Union[PlanResponse, PlanResponseError]:
         """
         Parse the plan response into plan text, raw function calls, and 'done' status.
