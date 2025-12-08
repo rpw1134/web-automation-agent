@@ -46,10 +46,10 @@ class Executor:
                     raise ValueError(f"Function {func_name} not found in tool definitions.")
 
                 # Parse each argument according to its type from tool definition
-                for i, property in enumerate(func_arg_names):
-                    property = tool_def.parameters.properties.get(func_arg_names[i], None)
+                for i, arg_name in enumerate(func_arg_names):
+                    property = tool_def.parameters.properties.get(arg_name, None)
                     if not property:
-                        raise ValueError(f"Parameter {func_arg_names[i]} not found in tool definition for function {func_name}.")
+                        raise ValueError(f"Parameter {arg_name} not found in tool definition for function {func_name}.")
                     match property.get("type"):
                         case "string":
                             func_args_parsed[func_arg_names[i]] = str(func_arg_values[i])

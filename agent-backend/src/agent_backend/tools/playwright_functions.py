@@ -227,7 +227,7 @@ async def get_elements_selectors_on_page(context_id: UUID, page_id: UUID) -> Too
 get_elements_selectors_on_page_tool = Tool(
     type="function",
     name="get_elements_selectors_on_page",
-    description="Get all element selectors on a page",
+    description="Get all element selectors on a page. NOT to be used for clicking or extracting text, only for getting a list of elements to refine further with get_locator_uuids_by.",
     parameters=Parameters(
         type="object",
         properties={
@@ -425,7 +425,7 @@ screenshot_page_tool = Tool(
 #     strict=True
 # )
 
-async def get_visible_elements_by(context_id: UUID, page_id: UUID, query: str, query_by: str) -> ToolResponse:
+async def get_locator_uuids_by(context_id: UUID, page_id: UUID, query: str, query_by: str) -> ToolResponse:
     """Get an element on a page by various query methods.
     Args:
         context_id: The UUID of the browser context containing the page.
@@ -483,10 +483,10 @@ async def get_visible_elements_by(context_id: UUID, page_id: UUID, query: str, q
             content=f"ERROR: Unexpected error while searching for element with {query_by}='{query}': {str(e)}"
         )
 
-get_visible_elements_by_tool = Tool(
+get_locator_uuids_by_tool = Tool(
     type="function",
-    name="get_visible_elements_by",
-    description="Get visible elements on a page using different query methods (CSS selector, label, or text)",
+    name="get_locator_uuids_by",
+    description="Get UUIDs for visible elements locators on a page using different query methods (CSS selector, label, or text). ONLY to be used after get_elements_selectors_on_page to refine selection. DO NOT use this with basic selectors that you make up.",
     parameters=Parameters(
         type="object",
         properties={
@@ -500,11 +500,11 @@ get_visible_elements_by_tool = Tool(
 )
 
 # NEED CONTEXT ID FOR GENERALIZED FUNCTION CALLING IN EXECUTOR
-async def click_by_locator(context_id, page_id: UUID, locator_id: UUID) -> ToolResponse:
-    """Click an element on a page using a stored locator ID.
+async def click_by_locator(context_id, page_id: UUID, locator_uuid: UUID) -> ToolResponse:
+    """Click an element on a page using a stored locator UUID.
     Args:
         page_id: The UUID of the page where the click will occur.
-        locator_id: The UUID of the stored locator to click.
+        locator_uuid: The UUID of the stored locator to click.
     Returns:
         ToolResponse: A dict with success status and message.
     """
@@ -513,148 +513,148 @@ async def click_by_locator(context_id, page_id: UUID, locator_id: UUID) -> ToolR
 
         # get current URL to detect page change
         current_url = page.url
-        locator: Locator = await get_locator_by_id(page_id, locator_id)
+        locator: Locator = await get_locator_by_id(page_id, locator_uuid)
         await locator.click(timeout=5000)
 
         # check if URL has changed, if so, return new elements
         labeled_elements = await detect_url_change(context_id, page_id, current_url)
-        return ToolResponse(success=True, content=f"Successfully clicked element with locator ID '{locator_id}'. {"" if not labeled_elements else f'Page URL changed to: {page.url}. New reactive elements: {labeled_elements}'}")
+        return ToolResponse(success=True, content=f"Successfully clicked element with locator UUID '{locator_uuid}'. {"" if not labeled_elements else f'Page URL changed to: {page.url}. New reactive elements: {labeled_elements}'}")
     except TimeoutError:
-        return ToolResponse(success=False, content=f"ERROR: Request timed out or element with locator ID '{locator_id}' not found for clicking.")
+        return ToolResponse(success=False, content=f"ERROR: Request timed out or element with locator UUID '{locator_uuid}' not found for clicking.")
     except Exception as e:
-        return ToolResponse(success=False, content=f"ERROR: Unexpected error clicking element with locator ID '{locator_id}': {str(e)}")
+        return ToolResponse(success=False, content=f"ERROR: Unexpected error clicking element with locator UUID '{locator_uuid}': {str(e)}")
 
 
 click_by_locator_tool = Tool(
     type="function",
     name="click_by_locator",
-    description="Click on an element by its locator id",
+    description="Click on an element by its locator uuid",
     parameters=Parameters(
         type="object",
         properties={
             "page_id": {"type": "UUID", "description": "The UUID of the page to query."},
-            "locator_id": {"type": "UUID", "description": "The UUID of the stored locator to click."}
+            "locator_uuid": {"type": "UUID", "description": "The UUID of the stored locator to click."}
         },
-        required=["page_id", "locator_id"]
+        required=["page_id", "locator_uuid"]
     ),
     strict=True
 )    
 
 # NEED CONTEXT ID FOR GENERALIZED FUNCTION CALLING IN EXECUTOR
-async def fill_field_by_locator(context_id, page_id: UUID, locator_id: UUID, text: str) -> ToolResponse:
-    """Fill an input field on a page using a stored locator ID.
+async def fill_field_by_locator(context_id, page_id: UUID, locator_uuid: UUID, text: str) -> ToolResponse:
+    """Fill an input field on a page using a stored locator UUID.
     Args:
         context_id: The UUID of the browser context containing the page.
         page_id: The UUID of the page where the filling will occur.
-        locator_id: The UUID of the stored locator to fill.
+        locator_uuid: The UUID of the stored locator to fill.
         text: The text to fill into the input field.
     Returns:
         ToolResponse: A dict with success status and message.
     """
     try:
-        locator: Locator = await get_locator_by_id(page_id, locator_id)
+        locator: Locator = await get_locator_by_id(page_id, locator_uuid)
         await locator.fill(value=text, timeout=5000)
-        return ToolResponse(success=True, content=f"Successfully filled text '{text}' into element with locator ID '{locator_id}'.")
+        return ToolResponse(success=True, content=f"Successfully filled text '{text}' into element with locator UUID '{locator_uuid}'.")
     except TimeoutError:
-        return ToolResponse(success=False, content=f"ERROR: Request timed out or input field with locator ID '{locator_id}' not found for filling.")
+        return ToolResponse(success=False, content=f"ERROR: Request timed out or input field with locator UUID '{locator_uuid}' not found for filling.")
     except Exception as e:
-        return ToolResponse(success=False, content=f"ERROR: Unexpected error filling element with locator ID '{locator_id}': {str(e)}")
+        return ToolResponse(success=False, content=f"ERROR: Unexpected error filling element with locator UUID '{locator_uuid}': {str(e)}")
 
 fill_field_by_locator_tool = Tool(
     type="function",
     name="fill_field_by_locator",
-    description="Fill a field of an element by its locator id",
+    description="Fill a field of an element by its locator uuid",
     parameters=Parameters(
         type="object",
         properties={
             "page_id": {"type": "UUID", "description": "The UUID of the page to query."},
-            "locator_id": {"type": "UUID", "description": "The UUID of the stored locator to fill."},
+            "locator_uuid": {"type": "UUID", "description": "The UUID of the stored locator to fill."},
             "text": {"type": "string", "description": "The text to fill into the input field."}
         },
-        required=["page_id", "locator_id", "text"]
+        required=["page_id", "locator_uuid", "text"]
     ),
     strict=True
 )    
 
 # NEED CONTEXT ID FOR GENERALIZED FUNCTION CALLING IN EXECUTOR
-async def extract_text_by_locator(context_id, page_id: UUID, locator_id: UUID) -> ToolResponse:
-    """Extract text content from an element on a page using a stored locator ID.
+async def extract_text_by_locator(context_id, page_id: UUID, locator_uuid: UUID) -> ToolResponse:
+    """Extract text content from an element on a page using a stored locator UUID.
     Args:
         context_id: The UUID of the browser context containing the page.
         page_id: The UUID of the page where the extraction will occur.
-        locator_id: The UUID of the stored locator to extract text from.
+        locator_uuid: The UUID of the stored locator to extract text from.
     Returns:
         ToolResponse: A dict with success status and extracted text or error message.
     """
     try:
-        locator: Locator = await get_locator_by_id(page_id, locator_id)
+        locator: Locator = await get_locator_by_id(page_id, locator_uuid)
         text_content = await locator.text_content(timeout=5000)
         if text_content is None:
-            return ToolResponse(success=False, content=f"ERROR: No text content found in element with locator ID '{locator_id}'.")
+            return ToolResponse(success=False, content=f"ERROR: No text content found in element with locator UUID '{locator_uuid}'.")
         return ToolResponse(success=True, content=text_content.strip())
     except TimeoutError:
-        return ToolResponse(success=False, content=f"ERROR: Request timed out or element with locator ID '{locator_id}' not found for text extraction.")
+        return ToolResponse(success=False, content=f"ERROR: Request timed out or element with locator UUID '{locator_uuid}' not found for text extraction.")
     except Exception as e:
-        return ToolResponse(success=False, content=f"ERROR: Unexpected error extracting text from element with locator ID '{locator_id}': {str(e)}")
+        return ToolResponse(success=False, content=f"ERROR: Unexpected error extracting text from element with locator UUID '{locator_uuid}': {str(e)}")
 
 extract_text_by_locator_tool = Tool(
     type="function",
     name="extract_text_by_locator",
-    description="Extract text content from an element by its locator id",
+    description="Extract text content from an element by its locator uuid",
     parameters=Parameters(
         type="object",
         properties={
             "page_id": {"type": "UUID", "description": "The UUID of the page where the extraction will occur."},
-            "locator_id": {"type": "UUID", "description": "The UUID of the stored locator to extract text from."}
+            "locator_uuid": {"type": "UUID", "description": "The UUID of the stored locator to extract text from."}
         },
-        required=["page_id", "locator_id"]
+        required=["page_id", "locator_uuid"]
     ),
     strict=True
 )
 
 # NEED CONTEXT ID FOR GENERALIZED FUNCTION CALLING IN EXECUTOR
-async def wait_for_locator(context_id, page_id: UUID, locator_id: UUID, timeout: int = 5000) -> ToolResponse:
-    """Wait for an element to appear on a page using a stored locator ID.
+async def wait_for_locator(context_id, page_id: UUID, locator_uuid: UUID, timeout: int = 5000) -> ToolResponse:
+    """Wait for an element to appear on a page using a stored locator UUID.
     Args:
         context_id: The UUID of the browser context containing the page.
         page_id: The UUID of the page to wait on.
-        locator_id: The UUID of the stored locator to wait for.
+        locator_uuid: The UUID of the stored locator to wait for.
         timeout: Maximum time to wait in milliseconds. Default is 5000ms.
     Returns:
         ToolResponse: A dict with success status and message.
     """
     try:
-        locator: Locator = await get_locator_by_id(page_id, locator_id)
+        locator: Locator = await get_locator_by_id(page_id, locator_uuid)
         await locator.wait_for(state="visible", timeout=timeout)
-        return ToolResponse(success=True, content=f"Element with locator ID '{locator_id}' is now visible on the page.")
+        return ToolResponse(success=True, content=f"Element with locator UUID '{locator_uuid}' is now visible on the page.")
     except TimeoutError:
-        return ToolResponse(success=False, content=f"ERROR: Request timed out or element with locator ID '{locator_id}' not found within {timeout}ms.")
+        return ToolResponse(success=False, content=f"ERROR: Request timed out or element with locator UUID '{locator_uuid}' not found within {timeout}ms.")
     except Exception as e:
-        return ToolResponse(success=False, content=f"ERROR: Unexpected error waiting for element with locator ID '{locator_id}': {str(e)}")
+        return ToolResponse(success=False, content=f"ERROR: Unexpected error waiting for element with locator UUID '{locator_uuid}': {str(e)}")
 
 wait_for_locator_tool = Tool(
     type="function",
     name="wait_for_locator",
-    description="Wait for an element to appear on a page by its locator id",
+    description="Wait for an element to appear on a page by its locator uuid",
     parameters=Parameters(
         type="object",
         properties={
             "page_id": {"type": "UUID", "description": "The UUID of the page to wait on."},
-            "locator_id": {"type": "UUID", "description": "The UUID of the stored locator to wait for."},
+            "locator_uuid": {"type": "UUID", "description": "The UUID of the stored locator to wait for."},
             "timeout": {"type": "integer", "description": "Maximum time to wait in milliseconds. Default is 5000ms."}
         },
-        required=["page_id", "locator_id"]
+        required=["page_id", "locator_uuid"]
     ),
     strict=True
 )
 
 # NEED CONTEXT ID FOR GENERALIZED FUNCTION CALLING IN EXECUTOR
-async def press_key_by_locator(context_id, page_id: UUID, locator_id: UUID, key: str) -> ToolResponse:
-    """Press a key on an element on a page using a stored locator ID.
+async def press_key_by_locator(context_id, page_id: UUID, locator_uuid: UUID, key: str) -> ToolResponse:
+    """Press a key on an element on a page using a stored locator UUID.
     Args:
         context_id: The UUID of the browser context containing the page.
         page_id: The UUID of the page where the key press will occur.
-        locator_id: The UUID of the stored locator to press the key on.
+        locator_uuid: The UUID of the stored locator to press the key on.
         key: The key to press (e.g., "Enter", "Tab").
     Returns:
         ToolResponse: A dict with success status and message.
@@ -664,29 +664,29 @@ async def press_key_by_locator(context_id, page_id: UUID, locator_id: UUID, key:
 
         # get current URL to detect page change
         current_url = page.url
-        locator: Locator = await get_locator_by_id(page_id, locator_id)
+        locator: Locator = await get_locator_by_id(page_id, locator_uuid)
         await locator.press(key=key, timeout=5000)
 
         # check if URL has changed, if so, return new elements
         labeled_elements = await detect_url_change(context_id, page_id, current_url)
-        return ToolResponse(success=True, content=f"Successfully pressed key '{key}' on element with locator ID '{locator_id}'. {'' if not labeled_elements else f'Page URL changed to: {page.url}. New reactive elements: {labeled_elements}'}")
+        return ToolResponse(success=True, content=f"Successfully pressed key '{key}' on element with locator UUID '{locator_uuid}'. {'' if not labeled_elements else f'Page URL changed to: {page.url}. New reactive elements: {labeled_elements}'}")
     except TimeoutError:
-        return ToolResponse(success=False, content=f"ERROR: Request timed out or element with locator ID '{locator_id}' not found for key press.")
+        return ToolResponse(success=False, content=f"ERROR: Request timed out or element with locator UUID '{locator_uuid}' not found for key press.")
     except Exception as e:
-        return ToolResponse(success=False, content=f"ERROR: Unexpected error pressing key '{key}' on element with locator ID '{locator_id}': {str(e)}")
+        return ToolResponse(success=False, content=f"ERROR: Unexpected error pressing key '{key}' on element with locator UUID '{locator_uuid}': {str(e)}")
 
 press_key_by_locator_tool = Tool(
     type="function",
     name="press_key_by_locator",
-    description="Press a key on an element by its locator id",
+    description="Press a key on an element by its locator uuid",
     parameters=Parameters(
         type="object",
         properties={
             "page_id": {"type": "UUID", "description": "The UUID of the page where the key press will occur."},
-            "locator_id": {"type": "UUID", "description": "The UUID of the stored locator to press the key on."},
+            "locator_uuid": {"type": "UUID", "description": "The UUID of the stored locator to press the key on."},
             "key": {"type": "string", "description": "The key to press (e.g., 'Enter', 'Tab')."}
         },
-        required=["page_id", "locator_id", "key"]
+        required=["page_id", "locator_uuid", "key"]
     ),
     strict=True
 )
@@ -747,7 +747,7 @@ playwright_function_names_to_functions: Dict[str, Callable[..., Awaitable[ToolRe
     "wait_for": wait_for,
     "get_elements_selectors_on_page": get_elements_selectors_on_page,
     # "get_open_pages": get_open_pages,
-    "get_visible_elements_by": get_visible_elements_by,
+    "get_locator_uuids_by": get_locator_uuids_by,
     "click_by_locator": click_by_locator,
     "fill_field_by_locator": fill_field_by_locator,
     "extract_text_by_locator": extract_text_by_locator,
@@ -769,7 +769,7 @@ playwright_function_names_to_tools: Dict[str, Tool] = {
     "wait_for": wait_for_tool,
     "get_elements_selectors_on_page": get_elements_selectors_on_page_tool,
     # "get_open_pages": get_open_pages_tool,
-    "get_visible_elements_by": get_visible_elements_by_tool,
+    "get_locator_uuids_by": get_locator_uuids_by_tool,
     "click_by_locator": click_by_locator_tool,
     "fill_field_by_locator": fill_field_by_locator_tool,
     "extract_text_by_locator": extract_text_by_locator_tool,
